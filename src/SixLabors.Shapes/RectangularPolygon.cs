@@ -293,7 +293,7 @@ namespace SixLabors.Shapes
         /// <inheritdoc />
         public SegmentInfo PointAlongPath(float distanceAlongPath)
         {
-            distanceAlongPath = distanceAlongPath % this.length;
+            distanceAlongPath %= this.length;
 
             if (distanceAlongPath < this.Width)
             {

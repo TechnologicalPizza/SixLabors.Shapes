@@ -16,6 +16,10 @@ namespace SixLabors.Shapes
     /// </summary>
     internal class InternalPath
     {
+        private static readonly Func<PointData, float> GetDataX = x => x.Point.X;
+        private static readonly Func<PointData, float> GetDataY = x => x.Point.Y;
+        private static readonly Func<PointData, float> GetDataSum = x => x.Length;
+
         /// <summary>
         /// The epsilon for float comparison
         /// </summary>
@@ -30,7 +34,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The points.
         /// </summary>
-        private readonly PointData[] points;
+        private readonly PointData[] _points;
 
         /// <summary>
         /// The closed path.
@@ -42,7 +46,7 @@ namespace SixLabors.Shapes
         /// </summary>
         /// <param name="segments">The segments.</param>
         /// <param name="isClosedPath">if set to <c>true</c> [is closed path].</param>
-        internal InternalPath(IEnumerable<ILineSegment> segments, bool isClosedPath)
+        internal InternalPath(ILineSegment[] segments, bool isClosedPath)
             : this(Simplify(segments, isClosedPath), isClosedPath)
         {
         }
@@ -74,16 +78,16 @@ namespace SixLabors.Shapes
         /// <param name="isClosedPath">if set to <c>true</c> [is closed path].</param>
         private InternalPath(PointData[] points, bool isClosedPath)
         {
-            this.points = points;
-            this.closedPath = isClosedPath;
+            _points = points;
+            closedPath = isClosedPath;
 
-            float minX = this.points.Min(x => x.Point.X);
-            float maxX = this.points.Max(x => x.Point.X);
-            float minY = this.points.Min(x => x.Point.Y);
-            float maxY = this.points.Max(x => x.Point.Y);
+            float minX = _points.FastMin(GetDataX);
+            float minY = _points.FastMin(GetDataY);
+            float maxX = _points.FastMax(GetDataX);
+            float maxY = _points.FastMax(GetDataY);
 
-            this.Bounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
-            this.Length = this.points.Sum(x => x.Length);
+            Bounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
+            Length = _points.FastSum(GetDataSum);
         }
 
         /// <summary>
@@ -126,7 +130,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets the length.
         /// </summary>
-        public int PointCount => this.points.Length;
+        public int PointCount => _points.Length;
 
         /// <summary>
         /// Calculates the distance from the path.
@@ -138,9 +142,9 @@ namespace SixLabors.Shapes
             PointInfoInternal internalInfo = default;
             internalInfo.DistanceSquared = float.MaxValue; // Set it to max so that CalculateShorterDistance can reduce it back down
 
-            int polyCorners = this.points.Length;
+            int polyCorners = _points.Length;
 
-            if (!this.closedPath)
+            if (!closedPath)
             {
                 polyCorners -= 1;
             }
@@ -149,12 +153,12 @@ namespace SixLabors.Shapes
             for (int i = 0; i < polyCorners; i++)
             {
                 int next = i + 1;
-                if (this.closedPath && next == polyCorners)
+                if (closedPath && next == polyCorners)
                 {
                     next = 0;
                 }
 
-                if (this.CalculateShorterDistance(this.points[i].Point, this.points[next].Point, point, ref internalInfo))
+                if (CalculateShorterDistance(_points[i].Point, _points[next].Point, point, ref internalInfo))
                 {
                     closestPoint = i;
                 }
@@ -162,7 +166,7 @@ namespace SixLabors.Shapes
 
             return new PointInfo
             {
-                DistanceAlongPath = this.points[closestPoint].TotalLength + Vector2.Distance(this.points[closestPoint].Point, internalInfo.PointOnLine),
+                DistanceAlongPath = _points[closestPoint].TotalLength + Vector2.Distance(_points[closestPoint].Point, internalInfo.PointOnLine),
                 DistanceFromPath = (float)Math.Sqrt(internalInfo.DistanceSquared),
                 SearchPoint = point,
                 ClosestPointOnPath = internalInfo.PointOnLine
@@ -179,20 +183,20 @@ namespace SixLabors.Shapes
         /// <returns>number of intersections hit</returns>
         public int FindIntersections(PointF start, PointF end, Span<PointF> buffer)
         {
-            if (this.points.Length < 2)
+            if (_points.Length < 2)
             {
                 return 0;
             }
 
             int count = buffer.Length;
 
-            this.ClampPoints(ref start, ref end);
+            ClampPoints(ref start, ref end);
 
             var target = new Segment(start, end);
 
-            int polyCorners = this.points.Length;
+            int polyCorners = _points.Length;
 
-            if (!this.closedPath)
+            if (!closedPath)
             {
                 polyCorners -= 1;
             }
@@ -200,31 +204,31 @@ namespace SixLabors.Shapes
             int position = 0;
             Vector2 lastPoint = MaxVector;
 
-            PassPointData[] precaclulate = ArrayPool<PassPointData>.Shared.Rent(this.points.Length);
+            PassPointData[] precaclulate = ArrayPool<PassPointData>.Shared.Rent(_points.Length);
 
             try
             {
                 // pre calculate relative orientations X places ahead and behind
                 Vector2 startToEnd = end - start;
-                Orientation prevOrientation = CalulateOrientation(startToEnd, this.points[polyCorners - 1].Point - end);
-                Orientation nextOrientation = CalulateOrientation(startToEnd, this.points[0].Point - end);
-                Orientation nextPlus1Orientation = CalulateOrientation(startToEnd, this.points[1].Point - end);
+                Orientation prevOrientation = CalulateOrientation(startToEnd, _points[polyCorners - 1].Point - end);
+                Orientation nextOrientation = CalulateOrientation(startToEnd, _points[0].Point - end);
+                Orientation nextPlus1Orientation = CalulateOrientation(startToEnd, _points[1].Point - end);
 
                 // iterate over all points and precalculate data about each, pre cacluating it relative orientation
                 for (int i = 0; i < polyCorners && count > 0; i++)
                 {
-                    ref Segment edge = ref this.points[i].Segment;
+                    ref Segment edge = ref _points[i].Segment;
 
                     // shift all orientations along but one place and fill in the last one
                     Orientation pointOrientation = nextOrientation;
                     nextOrientation = nextPlus1Orientation;
-                    nextPlus1Orientation = CalulateOrientation(startToEnd, this.points[WrapArrayIndex(i + 2, this.points.Length)].Point - end);
+                    nextPlus1Orientation = CalulateOrientation(startToEnd, _points[WrapArrayIndex(i + 2, _points.Length)].Point - end);
 
                     // should this point cause the last matched point to be excluded
                     bool removeLastIntersection = nextOrientation == Orientation.Colinear &&
                                                   pointOrientation == Orientation.Colinear &&
                                                   nextPlus1Orientation != prevOrientation &&
-                                                  (this.closedPath || i > 0) &&
+                                                  (closedPath || i > 0) &&
                                                   (IsOnSegment(target, edge.Start) || IsOnSegment(target, edge.End));
 
                     // is there any chance the segments will intersection (do their bounding boxes touch)
@@ -248,19 +252,19 @@ namespace SixLabors.Shapes
                 }
 
                 // seed the last point for deduping at begining of closed line
-                if (this.closedPath)
+                if (closedPath)
                 {
                     int prev = polyCorners - 1;
 
                     if (precaclulate[prev].DoIntersect)
                     {
-                        lastPoint = FindIntersection(this.points[prev].Segment, target);
+                        lastPoint = FindIntersection(_points[prev].Segment, target);
                     }
                 }
 
                 for (int i = 0; i < polyCorners && count > 0; i++)
                 {
-                    int next = WrapArrayIndex(i + 1, this.points.Length);
+                    int next = WrapArrayIndex(i + 1, _points.Length);
 
                     if (precaclulate[i].RemoveLastIntersectionAndSkip)
                     {
@@ -275,7 +279,7 @@ namespace SixLabors.Shapes
 
                     if (precaclulate[i].DoIntersect)
                     {
-                        Vector2 point = FindIntersection(this.points[i].Segment, target);
+                        Vector2 point = FindIntersection(_points[i].Segment, target);
                         if (point != MaxVector)
                         {
                             if (lastPoint.Equivelent(point, Epsilon2))
@@ -285,12 +289,12 @@ namespace SixLabors.Shapes
                                 int last = WrapArrayIndex(i - 1 + polyCorners, polyCorners);
 
                                 // hit the same point a second time do we need to remove the old one if just clipping
-                                if (this.points[next].Point.Equivelent(point, Epsilon))
+                                if (_points[next].Point.Equivelent(point, Epsilon))
                                 {
                                     next = i;
                                 }
 
-                                if (this.points[last].Point.Equivelent(point, Epsilon))
+                                if (_points[last].Point.Equivelent(point, Epsilon))
                                 {
                                     last = i;
                                 }
@@ -335,21 +339,21 @@ namespace SixLabors.Shapes
         public bool PointInPolygon(PointF point)
         {
             // You can only be inside a path if its "closed"
-            if (!this.closedPath)
+            if (!closedPath)
             {
                 return false;
             }
 
-            if (!this.Bounds.Contains(point))
+            if (!Bounds.Contains(point))
             {
                 return false;
             }
 
             // if it hit any points then class it as inside
-            PointF[] buffer = ArrayPool<PointF>.Shared.Rent(this.points.Length);
+            PointF[] buffer = ArrayPool<PointF>.Shared.Rent(_points.Length);
             try
             {
-                int intersection = this.FindIntersections(point, new Vector2(this.Bounds.Left - 1, this.Bounds.Top - 1), buffer);
+                int intersection = FindIntersections(point, new Vector2(Bounds.Left - 1, Bounds.Top - 1), buffer);
                 if ((intersection & 1) == 1)
                 {
                     return true;
@@ -375,8 +379,14 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets the points.
         /// </summary>
-        /// <returns>The <see cref="IReadOnlyCollection{PointF}"/></returns>
-        internal IReadOnlyList<PointF> Points() => this.points.Select(x => (PointF)x.Point).ToArray();
+        /// <returns>The <see cref="List{PointF}"/></returns>
+        internal List<PointF> Points()
+        {
+            var list = new List<PointF>(_points.Length);
+            foreach (var pointData in _points)
+                list.Add(pointData.Point);
+            return list;
+        }
 
         /// <summary>
         /// Calculates the the point a certain distance a path.
@@ -387,22 +397,22 @@ namespace SixLabors.Shapes
         /// </returns>
         internal SegmentInfo PointAlongPath(float distanceAlongPath)
         {
-            distanceAlongPath = distanceAlongPath % this.Length;
-            int pointCount = this.PointCount;
-            if (this.closedPath)
+            distanceAlongPath %= Length;
+            int pointCount = PointCount;
+            if (closedPath)
             {
                 pointCount--;
             }
 
             for (int i = 0; i < pointCount; i++)
             {
-                int next = WrapArrayIndex(i + 1, this.PointCount);
-                if (distanceAlongPath < this.points[next].Length)
+                int next = WrapArrayIndex(i + 1, PointCount);
+                if (distanceAlongPath < _points[next].Length)
                 {
-                    float t = distanceAlongPath / this.points[next].Length;
-                    Vector2 point = (this.points[i].Point * (1 - t)) + (this.points[next].Point * t);
+                    float t = distanceAlongPath / _points[next].Length;
+                    Vector2 point = (_points[i].Point * (1 - t)) + (_points[next].Point * t);
 
-                    Vector2 diff = this.points[i].Point - this.points[next].Point;
+                    Vector2 diff = _points[i].Point - _points[next].Point;
 
                     return new SegmentInfo
                     {
@@ -412,7 +422,7 @@ namespace SixLabors.Shapes
                 }
                 else
                 {
-                    distanceAlongPath -= this.points[next].Length;
+                    distanceAlongPath -= _points[next].Length;
                 }
             }
 
@@ -548,7 +558,6 @@ namespace SixLabors.Shapes
             double x34 = x3 - x4;
             double y34 = y3 - y4;
             double inter = (x12 * y34) - (y12 * x34);
-
             if (inter > -Epsilon && inter < Epsilon)
             {
                 return MaxVector;
@@ -559,8 +568,7 @@ namespace SixLabors.Shapes
             double x = ((x34 * u) - (x12 * v)) / inter;
             double y = ((y34 * u) - (y12 * v)) / inter;
 
-            Vector2 point = new Vector2((float)x, (float)y);
-
+            var point = new Vector2((float)x, (float)y);
             if (IsOnSegments(source, target, point))
             {
                 return point;
@@ -575,14 +583,29 @@ namespace SixLabors.Shapes
         /// <param name="segments">The segments.</param>
         /// <param name="isClosed">Weather the path is closed or open.</param>
         /// <returns>
-        /// The <see cref="T:Vector2[]"/>.
+        /// The <see cref="T:PointData[]"/>.
         /// </returns>
-        private static PointData[] Simplify(IEnumerable<ILineSegment> segments, bool isClosed)
+        private static PointData[] Simplify(ILineSegment[] segments, bool isClosed)
         {
             var simplified = new List<PointF>();
-            foreach (ILineSegment seg in segments)
+            foreach (var segment in segments)
             {
-                simplified.AddRange(seg.Flatten());
+                var flatSegment = segment.Flatten();
+                if (flatSegment is PointF[] array)
+                {
+                    foreach (var point in array)
+                        simplified.Add(point);
+                }
+                else if (flatSegment is List<PointF> list)
+                {
+                    foreach (var point in list)
+                        simplified.Add(point);
+                }
+                else
+                {
+                    foreach (var point in flatSegment)
+                        simplified.Add(point);
+                }
             }
 
             return Simplify(simplified, isClosed);
@@ -590,12 +613,11 @@ namespace SixLabors.Shapes
 
         private static PointData[] Simplify(IEnumerable<PointF> vectors, bool isClosed)
         {
-            PointF[] points = vectors.ToArray();
-            var results = new List<PointData>();
-
-            int polyCorners = points.Length;
-
+            var points = vectors is IList<PointF> list ? list : vectors.ToArray();
             Vector2 lastPoint = points[0];
+
+            int polyCorners = points.Count;
+            var results = new List<PointData>();
 
             if (!isClosed)
             {
@@ -617,13 +639,13 @@ namespace SixLabors.Shapes
                         // all points are common, shouldn't match anything
                         results.Add(
                             new PointData
-                                {
-                                    Point = points[0],
-                                    Orientation = Orientation.Colinear,
-                                    Segment = new Segment(points[0], points[1]),
-                                    Length = 0,
-                                    TotalLength = 0
-                                });
+                            {
+                                Point = points[0],
+                                Orientation = Orientation.Colinear,
+                                Segment = new Segment(points[0], points[1]),
+                                Length = 0,
+                                TotalLength = 0
+                            });
                         return results.ToArray();
                     }
                 }
@@ -634,12 +656,12 @@ namespace SixLabors.Shapes
 
                 results.Add(
                     new PointData
-                        {
-                            Point = points[0],
-                            Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
-                            Length = Vector2.Distance(lastPoint, points[0]),
-                            TotalLength = 0
-                        });
+                    {
+                        Point = points[0],
+                        Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
+                        Length = Vector2.Distance(lastPoint, points[0]),
+                        TotalLength = 0
+                    });
 
                 lastPoint = points[0];
             }
@@ -670,7 +692,7 @@ namespace SixLabors.Shapes
             if (isClosed)
             {
                 // walk back removing collinear points
-                while (results.Count > 2 && results.Last().Orientation == Orientation.Colinear)
+                while (results.Count > 2 && results[results.Count - 1].Orientation == Orientation.Colinear)
                 {
                     results.RemoveAt(results.Count - 1);
                 }
@@ -691,42 +713,42 @@ namespace SixLabors.Shapes
             // clean up start and end points
             if (start.X == float.MaxValue)
             {
-                start.X = this.Bounds.Right + 1;
+                start.X = Bounds.Right + 1;
             }
 
             if (start.X == float.MinValue)
             {
-                start.X = this.Bounds.Left - 1;
+                start.X = Bounds.Left - 1;
             }
 
             if (end.X == float.MaxValue)
             {
-                end.X = this.Bounds.Right + 1;
+                end.X = Bounds.Right + 1;
             }
 
             if (end.X == float.MinValue)
             {
-                end.X = this.Bounds.Left - 1;
+                end.X = Bounds.Left - 1;
             }
 
             if (start.Y == float.MaxValue)
             {
-                start.Y = this.Bounds.Bottom + 1;
+                start.Y = Bounds.Bottom + 1;
             }
 
             if (start.Y == float.MinValue)
             {
-                start.Y = this.Bounds.Top - 1;
+                start.Y = Bounds.Top - 1;
             }
 
             if (end.Y == float.MaxValue)
             {
-                end.Y = this.Bounds.Bottom + 1;
+                end.Y = Bounds.Bottom + 1;
             }
 
             if (end.Y == float.MinValue)
             {
-                end.Y = this.Bounds.Top - 1;
+                end.Y = Bounds.Top - 1;
             }
         }
 
@@ -734,27 +756,26 @@ namespace SixLabors.Shapes
         /// Returns the length of the path.
         /// </summary>
         /// <returns>
-        /// The <see cref="float"/>.
+        /// The <see cref="float"/> length.
         /// </returns>
         private float CalculateLength()
         {
             float length = 0;
-            int polyCorners = this.points.Length;
+            int polyCorners = _points.Length;
 
-            if (!this.closedPath)
+            if (!closedPath)
             {
                 polyCorners -= 1;
             }
 
             for (int i = 0; i < polyCorners; i++)
             {
-                int next = i + 1;
-                if (this.closedPath && next == polyCorners)
-                {
-                    next = 0;
-                }
+                // why is this here
+                //int next = i + 1;
+                //if (this.closedPath && next == polyCorners)
+                //    next = 0;
 
-                length += this.points[i].Length;
+                length += _points[i].Length;
             }
 
             return length;
@@ -849,11 +870,11 @@ namespace SixLabors.Shapes
 
             public Segment(PointF start, PointF end)
             {
-                this.Start = start;
-                this.End = end;
+                Start = start;
+                End = end;
 
-                this.Min = Vector2.Min(start, end);
-                this.Max = Vector2.Max(start, end);
+                Min = Vector2.Min(start, end);
+                Max = Vector2.Max(start, end);
             }
         }
     }

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using SixLabors.Primitives;
 
@@ -17,7 +18,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The collection of points.
         /// </summary>
-        private readonly PointF[] points;
+        private readonly PointF[] _points;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LinearLineSegment"/> class.
@@ -46,11 +47,10 @@ namespace SixLabors.Shapes
         /// <param name="points">The points.</param>
         public LinearLineSegment(PointF[] points)
         {
-            this.points = points ?? throw new ArgumentNullException(nameof(points));
+            Guard.MustBeGreaterThanOrEqualTo(points.Length, 2, nameof(points));
 
-            Guard.MustBeGreaterThanOrEqualTo(this.points.Length, 2, nameof(points));
-
-            this.EndPoint = this.points[this.points.Length - 1];
+            this._points = points ?? throw new ArgumentNullException(nameof(points));
+            this.EndPoint = this._points[this._points.Length - 1];
         }
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace SixLabors.Shapes
         /// <returns>
         /// Returns the current <see cref="ILineSegment" /> as simple linear path.
         /// </returns>
-        public IReadOnlyList<PointF> Flatten() => this.points;
+        public IReadOnlyList<PointF> Flatten() => this._points;
 
         /// <summary>
         /// Transforms the current LineSegment using specified matrix.
@@ -84,11 +84,11 @@ namespace SixLabors.Shapes
                 return this;
             }
 
-            var transformedPoints = new PointF[this.points.Length];
+            var transformedPoints = new PointF[this._points.Length];
 
-            for (int i = 0; i < this.points.Length; i++)
+            for (int i = 0; i < this._points.Length; i++)
             {
-                transformedPoints[i] = PointF.Transform(this.points[i], matrix);
+                transformedPoints[i] = PointF.Transform(this._points[i], matrix);
             }
 
             return new LinearLineSegment(transformedPoints);

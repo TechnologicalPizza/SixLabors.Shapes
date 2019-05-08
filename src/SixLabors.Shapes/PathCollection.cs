@@ -16,14 +16,18 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public class PathCollection : IPathCollection
     {
+        private static readonly Func<IPath, float> GetLeft = x => x.Bounds.Left;
+        private static readonly Func<IPath, float> GetRight = x => x.Bounds.Right;
+        private static readonly Func<IPath, float> GetTop = x => x.Bounds.Top;
+        private static readonly Func<IPath, float> GetBottom = x => x.Bounds.Bottom;
+
         private readonly IPath[] paths;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PathCollection"/> class.
         /// </summary>
         /// <param name="paths">The collection of paths</param>
-        public PathCollection(IEnumerable<IPath> paths)
-            : this(paths?.ToArray())
+        public PathCollection(IEnumerable<IPath> paths) : this(paths?.ToArray())
         {
         }
 
@@ -41,11 +45,10 @@ namespace SixLabors.Shapes
             }
             else
             {
-                float minX = this.paths.Min(x => x.Bounds.Left);
-                float maxX = this.paths.Max(x => x.Bounds.Right);
-
-                float minY = this.paths.Min(x => x.Bounds.Top);
-                float maxY = this.paths.Max(x => x.Bounds.Bottom);
+                float minX = this.paths.FastMin(GetLeft);
+                float maxX = this.paths.FastMax(GetRight);
+                float minY = this.paths.FastMin(GetTop);
+                float maxY = this.paths.FastMax(GetBottom);
 
                 this.Bounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
             }
@@ -55,22 +58,20 @@ namespace SixLabors.Shapes
         public RectangleF Bounds { get; }
 
         /// <inheritdoc />
-        public IEnumerator<IPath> GetEnumerator() => ((IEnumerable<IPath>)this.paths).GetEnumerator();
-
-        /// <inheritdoc />
         public IPathCollection Transform(Matrix3x2 matrix)
         {
             var result = new IPath[this.paths.Length];
 
             for (int i = 0; i < this.paths.Length && i < result.Length; i++)
-            {
                 result[i] = this.paths[i].Transform(matrix);
-            }
 
             return new PathCollection(result);
         }
 
         /// <inheritdoc />
-        IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable<IPath>)this.paths).GetEnumerator();
+        public IEnumerator<IPath> GetEnumerator() => ((IEnumerable<IPath>)this.paths).GetEnumerator();
+
+        /// <inheritdoc />
+        IEnumerator IEnumerable.GetEnumerator() => this.paths.GetEnumerator();
     }
 }

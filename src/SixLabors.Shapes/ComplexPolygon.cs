@@ -15,6 +15,11 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public sealed class ComplexPolygon : IPath
     {
+        /// <summary>
+        /// A complex polygon with no paths.
+        /// </summary>
+        public static readonly ComplexPolygon Empty = new ComplexPolygon(Array.Empty<IPath>());
+
         private readonly IPath[] paths;
 
         /// <summary>
@@ -279,7 +284,7 @@ namespace SixLabors.Shapes
         /// </returns>
         public SegmentInfo PointAlongPath(float distanceAlongPath)
         {
-            distanceAlongPath = distanceAlongPath % this.Length;
+            distanceAlongPath %= this.Length;
 
             foreach (IPath p in this.Paths)
             {

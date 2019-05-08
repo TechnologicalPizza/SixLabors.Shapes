@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Six Labors and contributors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using SixLabors.Fonts;
 using SixLabors.Primitives;
 using SixLabors.Shapes.Text;
@@ -15,19 +16,28 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Generates the shapes corresponding the glyphs described by the font and with the settings withing the FontSpan
         /// </summary>
+        /// <param name="builder">The renderer</param>
+        /// <param name="text">The text to generate glyphs for</param>
+        /// <param name="style">The style and settings to use while rendering the glyphs</param>
+        /// <returns>The <see cref="PathCollection"/></returns>
+        public static IPathCollection GenerateGlyphs(IGlyphBuilder builder, ReadOnlySpan<char> text, RendererOptions style)
+        {
+            TextRenderer.RenderText(builder, text, style);
+            return builder.BuildPath();
+        }
+
+        /// <summary>
+        /// Generates the shapes corresponding the glyphs described by the font and with the settings withing the FontSpan
+        /// </summary>
         /// <param name="text">The text to generate glyphs for</param>
         /// <param name="location">The location</param>
         /// <param name="style">The style and settings to use while rendering the glyphs</param>
-        /// <returns>The <see cref="IPathCollection"/></returns>
-        public static IPathCollection GenerateGlyphs(string text, PointF location, RendererOptions style)
+        /// <returns>The <see cref="PathCollection"/></returns>
+        public static IPathCollection GenerateGlyphs(ReadOnlySpan<char> text, PointF location, RendererOptions style)
         {
-            GlyphBuilder glyphBuilder = new GlyphBuilder(location);
-
-            TextRenderer renderer = new TextRenderer(glyphBuilder);
-
-            renderer.RenderText(text, style);
-
-            return glyphBuilder.Paths;
+            var glyphBuilder = new GlyphBuilder(location);
+            TextRenderer.RenderText(glyphBuilder, text, style);
+            return glyphBuilder.BuildPath();
         }
 
         /// <summary>
@@ -35,8 +45,8 @@ namespace SixLabors.Shapes
         /// </summary>
         /// <param name="text">The text to generate glyphs for</param>
         /// <param name="style">The style and settings to use while rendering the glyphs</param>
-        /// <returns>The <see cref="IPathCollection"/></returns>
-        public static IPathCollection GenerateGlyphs(string text, RendererOptions style)
+        /// <returns>The <see cref="PathCollection"/></returns>
+        public static IPathCollection GenerateGlyphs(ReadOnlySpan<char> text, RendererOptions style)
         {
             return GenerateGlyphs(text, PointF.Empty, style);
         }
@@ -47,16 +57,12 @@ namespace SixLabors.Shapes
         /// <param name="text">The text to generate glyphs for</param>
         /// <param name="path">The path to draw the text in relation to</param>
         /// <param name="style">The style and settings to use while rendering the glyphs</param>
-        /// <returns>The <see cref="IPathCollection"/></returns>
-        public static IPathCollection GenerateGlyphs(string text, IPath path, RendererOptions style)
+        /// <returns>The <see cref="PathCollection"/></returns>
+        public static IPathCollection GenerateGlyphs(ReadOnlySpan<char> text, IPath path, RendererOptions style)
         {
-            PathGlyphBuilder glyphBuilder = new PathGlyphBuilder(path);
-
-            TextRenderer renderer = new TextRenderer(glyphBuilder);
-
-            renderer.RenderText(text, style);
-
-            return glyphBuilder.Paths;
+            var glyphBuilder = new PathGlyphBuilder(path);
+            TextRenderer.RenderText(glyphBuilder, text, style);
+            return glyphBuilder.BuildPath();
         }
     }
 }

@@ -43,7 +43,7 @@ namespace SixLabors.Shapes.Text
             // due to how matrix combining works you have to combine thins in the revers order of operation
             // this one rotates the glype then moves it.
             Matrix3x2 matrix = Matrix3x2.CreateTranslation(targetPoint - rect.Location) * Matrix3x2.CreateRotation(point.Angle - Pi, point.Point);
-            this.builder.SetTransform(matrix);
+            this.Builder.SetTransform(matrix);
         }
     }
 }

@@ -11,10 +11,10 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Merges the specified source2.
         /// </summary>
-        /// <typeparam name="T">the type of the array</typeparam>
+        /// <typeparam name="T">the type of the array.</typeparam>
         /// <param name="source1">The source1.</param>
         /// <param name="source2">The source2.</param>
-        /// <returns>the Merged arrays</returns>
+        /// <returns>the Merged arrays.</returns>
         public static T[] Merge<T>(this T[] source1, T[] source2)
         {
             if (source2 is null)

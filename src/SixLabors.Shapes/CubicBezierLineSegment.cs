@@ -9,7 +9,7 @@ using SixLabors.Primitives;
 namespace SixLabors.Shapes
 {
     /// <summary>
-    /// Represents a line segment that contains a lists of control points that will be rendered as a cubic bezier curve
+    /// Represents a line segment that contains a lists of control points that will be rendered as a cubic bezier curve.
     /// </summary>
     /// <seealso cref="ILineSegment" />
     public sealed class CubicBezierLineSegment : ILineSegment
@@ -112,35 +112,35 @@ namespace SixLabors.Shapes
             var drawingPoints = new List<PointF>();
             int curveCount = (controlPoints.Length - 1) / 3;
 
+            // TODO: add pooling
+            var tmpList = new List<PointF>();
             for (int curveIndex = 0; curveIndex < curveCount; curveIndex++)
             {
-                List<PointF> bezierCurveDrawingPoints = FindDrawingPoints(curveIndex, controlPoints);
+                FindDrawingPoints(curveIndex, controlPoints, tmpList);
 
                 if (curveIndex != 0)
                 {
-                    // remove the fist point, as it coincides with the last point of the previous Bezier curve.
-                    bezierCurveDrawingPoints.RemoveAt(0);
+                    // remove the first point, as it coincides with the last point of the previous Bezier curve.
+                    tmpList.RemoveAt(0);
                 }
 
-                drawingPoints.AddRange(bezierCurveDrawingPoints);
+                foreach (var p in tmpList)
+                    drawingPoints.Add(p);
+                tmpList.Clear();
             }
 
             return drawingPoints;
         }
 
-        private static List<PointF> FindDrawingPoints(int curveIndex, PointF[] controlPoints)
+        private static void FindDrawingPoints(int curveIndex, PointF[] controlPoints, List<PointF> output)
         {
-            var pointList = new List<PointF>();
-
             Vector2 left = CalculateBezierPoint(curveIndex, 0, controlPoints);
             Vector2 right = CalculateBezierPoint(curveIndex, 1, controlPoints);
 
-            pointList.Add(left);
-            pointList.Add(right);
+            output.Add(left);
+            output.Add(right);
 
-            FindDrawingPoints(curveIndex, 0, 1, pointList, 1, controlPoints, 0);
-
-            return pointList;
+            FindDrawingPoints(curveIndex, 0, 1, output, 1, controlPoints, 0);
         }
 
         private static int FindDrawingPoints(
@@ -154,17 +154,13 @@ namespace SixLabors.Shapes
         {
             // max recursive depth for control points, means this is approx the max number of points discoverable
             if (depth > 999)
-            {
                 return 0;
-            }
 
             Vector2 left = CalculateBezierPoint(curveIndex, t0, controlPoints);
             Vector2 right = CalculateBezierPoint(curveIndex, t1, controlPoints);
 
             if ((left - right).LengthSquared() < MinimumSqrDistance)
-            {
                 return 0;
-            }
 
             float midT = (t0 + t1) / 2;
             Vector2 mid = CalculateBezierPoint(curveIndex, midT, controlPoints);

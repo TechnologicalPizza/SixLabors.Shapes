@@ -15,8 +15,7 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="Polygon"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
-        public Polygon(params ILineSegment[] segments)
-            : base((IEnumerable<ILineSegment>)segments)
+        public Polygon(params ILineSegment[] segments) : base(segments)
         {
         }
 
@@ -24,26 +23,15 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="Polygon"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
-        public Polygon(IEnumerable<ILineSegment> segments)
-            : base(segments)
+        public Polygon(IEnumerable<ILineSegment> segments) : base(segments)
         {
         }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Polygon" /> class.
-        /// </summary>
-        /// <param name="segment">The segment.</param>
-        public Polygon(ILineSegment segment)
-            : base(segment)
-        {
-        }
-
+        
         /// <summary>
         /// Initializes a new instance of the <see cref="Polygon"/> class.
         /// </summary>
         /// <param name="path">The path.</param>
-        internal Polygon(Path path)
-            : base(path)
+        internal Polygon(Path path) : base(path)
         {
         }
 

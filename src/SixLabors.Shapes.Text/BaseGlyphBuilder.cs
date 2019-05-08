@@ -2,27 +2,23 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Generic;
-using System.Numerics;
-
 using SixLabors.Fonts;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes.Text
 {
     /// <summary>
-    /// rendering surface that Fonts can use to generate Shapes.
+    /// Rendering surface that Fonts can use to generate Shapes.
     /// </summary>
-    internal class BaseGlyphBuilder : IGlyphRenderer
+    public class BaseGlyphBuilder : IGlyphBuilder
     {
-#pragma warning disable SA1401 // Fields should be private
+        private readonly List<IPath> _paths;
+        private PointF _currentPoint;
+
         /// <summary>
-        /// The builder. TODO: Should this be a property?
+        /// The underlying path builder.
         /// </summary>
-        // ReSharper disable once InconsistentNaming
-        protected readonly PathBuilder builder;
-#pragma warning restore SA1401 // Fields should be private
-        private readonly List<IPath> paths = new List<IPath>();
-        private PointF currentPoint = default(PointF);
+        protected PathBuilder Builder { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BaseGlyphBuilder"/> class.
@@ -30,13 +26,18 @@ namespace SixLabors.Shapes.Text
         public BaseGlyphBuilder()
         {
             // glyphs are renderd realative to bottom left so invert the Y axis to allow it to render on top left origin surface
-            this.builder = new PathBuilder();
+            this.Builder = new PathBuilder();
+            _paths = new List<IPath>();
+            _currentPoint = default;
         }
 
         /// <summary>
         /// Gets the paths that have been rendered by this.
         /// </summary>
-        public IPathCollection Paths => new PathCollection(this.paths);
+        public IPathCollection BuildPath()
+        {
+            return new PathCollection(this._paths.ToArray());
+        }
 
         /// <inheritdoc/>
         void IGlyphRenderer.EndText()
@@ -52,7 +53,7 @@ namespace SixLabors.Shapes.Text
         /// <inheritdoc/>
         bool IGlyphRenderer.BeginGlyph(RectangleF bounds, GlyphRendererParameters paramaters)
         {
-            this.builder.Clear();
+            this.Builder.Clear();
             this.BeginGlyph(bounds);
             return true;
         }
@@ -62,19 +63,19 @@ namespace SixLabors.Shapes.Text
         /// </summary>
         void IGlyphRenderer.BeginFigure()
         {
-            this.builder.StartFigure();
+            this.Builder.StartFigure();
         }
 
         /// <summary>
-        /// Draws a cubic bezier from the current point  to the <paramref name="point"/>
+        /// Draws a cubic bezier from the current point to the <paramref name="point"/>.
         /// </summary>
         /// <param name="secondControlPoint">The second control point.</param>
         /// <param name="thirdControlPoint">The third control point.</param>
         /// <param name="point">The point.</param>
         void IGlyphRenderer.CubicBezierTo(PointF secondControlPoint, PointF thirdControlPoint, PointF point)
         {
-            this.builder.AddBezier(this.currentPoint, secondControlPoint, thirdControlPoint, point);
-            this.currentPoint = point;
+            this.Builder.AddBezier(this._currentPoint, secondControlPoint, thirdControlPoint, point);
+            this._currentPoint = point;
         }
 
         /// <summary>
@@ -82,7 +83,7 @@ namespace SixLabors.Shapes.Text
         /// </summary>
         void IGlyphRenderer.EndGlyph()
         {
-            this.paths.Add(this.builder.Build());
+            this._paths.Add(this.Builder.Build());
         }
 
         /// <summary>
@@ -90,7 +91,7 @@ namespace SixLabors.Shapes.Text
         /// </summary>
         void IGlyphRenderer.EndFigure()
         {
-            this.builder.CloseFigure();
+            this.Builder.CloseFigure();
         }
 
         /// <summary>
@@ -99,8 +100,8 @@ namespace SixLabors.Shapes.Text
         /// <param name="point">The point.</param>
         void IGlyphRenderer.LineTo(PointF point)
         {
-            this.builder.AddLine(this.currentPoint, point);
-            this.currentPoint = point;
+            this.Builder.AddLine(this._currentPoint, point);
+            this._currentPoint = point;
         }
 
         /// <summary>
@@ -109,19 +110,19 @@ namespace SixLabors.Shapes.Text
         /// <param name="point">The point.</param>
         void IGlyphRenderer.MoveTo(PointF point)
         {
-            this.builder.StartFigure();
-            this.currentPoint = point;
+            this.Builder.StartFigure();
+            this._currentPoint = point;
         }
 
         /// <summary>
-        /// Draws a quadratics bezier from the current point  to the <paramref name="point"/>
+        /// Draws a quadratics bezier from the current point to the <paramref name="point"/>.
         /// </summary>
         /// <param name="secondControlPoint">The second control point.</param>
         /// <param name="point">The point.</param>
         void IGlyphRenderer.QuadraticBezierTo(PointF secondControlPoint, PointF point)
         {
-            this.builder.AddBezier(this.currentPoint, secondControlPoint, point);
-            this.currentPoint = point;
+            this.Builder.AddBezier(this._currentPoint, secondControlPoint, point);
+            this._currentPoint = point;
         }
 
         /// <summary>Called before any glyphs have been rendered.</summary>
@@ -134,6 +135,16 @@ namespace SixLabors.Shapes.Text
         /// <param name="rect">The bounds the glyph will be rendered at and at what size.</param>
         protected virtual void BeginGlyph(RectangleF rect)
         {
+        }
+
+        /// <summary>
+        /// Clears the current path.
+        /// </summary>
+        public virtual void Clear()
+        {
+            Builder.Clear();
+            _paths.Clear();
+            _currentPoint = default;
         }
     }
 }

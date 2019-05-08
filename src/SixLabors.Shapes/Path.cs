@@ -22,8 +22,7 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="Path"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
-        public Path(IEnumerable<ILineSegment> segments)
-            : this(segments?.ToArray())
+        public Path(IEnumerable<ILineSegment> segments) : this(segments?.ToArray())
         {
         }
 
@@ -31,8 +30,7 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="Path" /> class.
         /// </summary>
         /// <param name="path">The path.</param>
-        public Path(Path path)
-            : this(path.LineSegments)
+        public Path(Path path) : this(path.LineSegments)
         {
         }
 
@@ -138,7 +136,7 @@ namespace SixLabors.Shapes
             }
             else
             {
-                return new Polygon(this.LineSegments);
+                return new Polygon(this.LineSegments.ToArray());
             }
         }
 

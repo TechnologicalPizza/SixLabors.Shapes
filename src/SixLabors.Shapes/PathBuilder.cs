@@ -16,15 +16,15 @@ namespace SixLabors.Shapes
     {
         private readonly List<Figure> figures = new List<Figure>();
         private readonly Matrix3x2 defaultTransform;
-        private Figure currentFigure = null;
+
+        private Figure currentFigure;
         private Matrix3x2 currentTransform;
         private Matrix3x2 setTransform;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PathBuilder" /> class.
         /// </summary>
-        public PathBuilder()
-            : this(Matrix3x2.Identity)
+        public PathBuilder() : this(Matrix3x2.Identity)
         {
         }
 
@@ -35,6 +35,7 @@ namespace SixLabors.Shapes
         public PathBuilder(Matrix3x2 defaultTransform)
         {
             this.defaultTransform = defaultTransform;
+            this.currentFigure = new Figure();
             this.Clear();
             this.ResetTransform();
         }
@@ -61,7 +62,6 @@ namespace SixLabors.Shapes
             // the new origin should be transofrmed based on the default transform
             this.setTransform.Translation = origin;
             this.currentTransform = this.setTransform * this.defaultTransform;
-
             return this;
         }
 
@@ -73,7 +73,6 @@ namespace SixLabors.Shapes
         {
             this.setTransform = Matrix3x2.Identity;
             this.currentTransform = this.setTransform * this.defaultTransform;
-
             return this;
         }
 
@@ -85,7 +84,6 @@ namespace SixLabors.Shapes
         {
             this.setTransform.Translation = Vector2.Zero;
             this.currentTransform = this.setTransform * this.defaultTransform;
-
             return this;
         }
 
@@ -100,7 +98,6 @@ namespace SixLabors.Shapes
             end = PointF.Transform(end, this.currentTransform);
             start = PointF.Transform(start, this.currentTransform);
             this.currentFigure.AddSegment(new LinearLineSegment(start, end));
-
             return this;
         }
 
@@ -115,7 +112,6 @@ namespace SixLabors.Shapes
         public PathBuilder AddLine(float x1, float y1, float x2, float y2)
         {
             this.AddLine(new PointF(x1, y1), new PointF(x2, y2));
-
             return this;
         }
 
@@ -132,7 +128,6 @@ namespace SixLabors.Shapes
             }
 
             this.AddLines(points.ToArray());
-
             return this;
         }
 
@@ -144,7 +139,6 @@ namespace SixLabors.Shapes
         public PathBuilder AddLines(params PointF[] points)
         {
             this.AddSegment(new LinearLineSegment(points));
-
             return this;
         }
 
@@ -156,7 +150,6 @@ namespace SixLabors.Shapes
         public PathBuilder AddSegment(ILineSegment segment)
         {
             this.currentFigure.AddSegment(segment.Transform(this.currentTransform));
-
             return this;
         }
 
@@ -177,7 +170,6 @@ namespace SixLabors.Shapes
             Vector2 c2 = (((controlPointVector - endPointVector) * 2) / 3) + endPointVector;
 
             this.AddBezier(startPointVector, c1, c2, endPoint);
-
             return this;
         }
 
@@ -215,7 +207,6 @@ namespace SixLabors.Shapes
             {
                 this.currentFigure.IsClosed = false;
             }
-
             return this;
         }
 
@@ -227,7 +218,6 @@ namespace SixLabors.Shapes
         {
             this.currentFigure.IsClosed = true;
             this.StartFigure();
-
             return this;
         }
 
@@ -238,28 +228,40 @@ namespace SixLabors.Shapes
         public PathBuilder CloseAllFigures()
         {
             foreach (Figure f in this.figures)
-            {
                 f.IsClosed = true;
-            }
-
+            
             this.CloseFigure();
-
             return this;
         }
 
         /// <summary>
         /// Builds a complex polygon fromn the current working set of working operations.
         /// </summary>
-        /// <returns>The current set of operations as a complex polygon</returns>
+        /// <returns>
+        /// The current set of operations as a complex polygon 
+        /// or null if no operations were performed.
+        /// </returns>
         public IPath Build()
         {
-            IPath[] paths = this.figures.Where(x => !x.IsEmpty).Select(x => x.Build()).ToArray();
-            if (paths.Length == 1)
-            {
-                return paths[0];
-            }
+            int count = 0;
+            foreach (var x in figures)
+                if (!x.IsEmpty)
+                    count++;
 
-            return new ComplexPolygon(paths);
+            if (count == 0)
+                return ComplexPolygon.Empty;
+
+            if (count == 1)
+                return figures[0].Build();
+
+            var paths = new List<IPath>(count);
+            foreach (var x in figures)
+                if (!x.IsEmpty)
+                    paths.Add(x.Build());
+
+            var polygon = new ComplexPolygon(paths.ToArray());
+            // TODO: add pooling
+            return polygon;
         }
 
         /// <summary>
@@ -270,7 +272,6 @@ namespace SixLabors.Shapes
         {
             this.Clear();
             this.ResetTransform();
-
             return this;
         }
 
@@ -279,7 +280,7 @@ namespace SixLabors.Shapes
         /// </summary>
         public void Clear()
         {
-            this.currentFigure = new Figure();
+            currentFigure.Clear();
             this.figures.Clear();
             this.figures.Add(this.currentFigure);
         }
@@ -290,7 +291,7 @@ namespace SixLabors.Shapes
 
             public bool IsClosed { get; set; } = false;
 
-            public bool IsEmpty => !this.segments.Any();
+            public bool IsEmpty => this.segments.Count == 0;
 
             public void AddSegment(ILineSegment segment)
             {
@@ -302,6 +303,11 @@ namespace SixLabors.Shapes
                 return this.IsClosed
                     ? new Polygon(this.segments.ToArray())
                     : new Path(this.segments.ToArray());
+            }
+
+            public void Clear()
+            {
+                segments.Clear();
             }
         }
     }

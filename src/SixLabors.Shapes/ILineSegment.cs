@@ -21,7 +21,7 @@ namespace SixLabors.Shapes
         PointF EndPoint { get; }
 
         /// <summary>
-        /// Converts the <see cref="ILineSegment" /> into a simple linear path..
+        /// Converts the <see cref="ILineSegment" /> into a simple linear path.
         /// </summary>
         /// <returns>Returns the current <see cref="ILineSegment" /> as simple linear path.</returns>
         IReadOnlyList<PointF> Flatten();

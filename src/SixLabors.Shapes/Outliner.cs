@@ -203,14 +203,12 @@ namespace SixLabors.Shapes
             foreach (ISimplePath p in paths)
             {
                 IReadOnlyList<PointF> vectors = p.Points;
+
                 var points = new List<IntPoint>(vectors.Count);
                 foreach (Vector2 v in vectors)
-                {
                     points.Add(new IntPoint(v.X * ScalingFactor, v.Y * ScalingFactor));
-                }
 
                 EndType type = p.IsClosed ? EndType.etClosedLine : openEndCapStyle;
-
                 offset.AddPath(points, style, type);
             }
 
@@ -222,10 +220,15 @@ namespace SixLabors.Shapes
             var tree = new List<List<IntPoint>>();
             offset.Execute(ref tree, width * ScalingFactor / 2);
             var polygons = new List<Polygon>();
+
+            var points = new List<PointF>();
             foreach (List<IntPoint> pt in tree)
             {
-                PointF[] points = pt.Select(p => new PointF(p.X / ScalingFactor, p.Y / ScalingFactor)).ToArray();
-                polygons.Add(new Polygon(new LinearLineSegment(points)));
+                foreach (var point in pt)
+                    points.Add(new PointF(point.X / ScalingFactor, point.Y / ScalingFactor));
+
+                polygons.Add(new Polygon(new LinearLineSegment(points.ToArray())));
+                points.Clear();
             }
 
             return new ComplexPolygon(polygons.ToArray());
