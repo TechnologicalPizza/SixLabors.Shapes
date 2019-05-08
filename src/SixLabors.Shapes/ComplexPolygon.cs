@@ -50,24 +50,16 @@ namespace SixLabors.Shapes
             {
                 length += s.Length;
                 if (s.Bounds.Left < minX)
-                {
                     minX = s.Bounds.Left;
-                }
 
                 if (s.Bounds.Right > maxX)
-                {
                     maxX = s.Bounds.Right;
-                }
 
                 if (s.Bounds.Top < minY)
-                {
                     minY = s.Bounds.Top;
-                }
 
                 if (s.Bounds.Bottom > maxY)
-                {
                     maxY = s.Bounds.Bottom;
-                }
 
                 intersections += s.MaxIntersections;
             }

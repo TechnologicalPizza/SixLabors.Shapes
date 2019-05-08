@@ -608,7 +608,10 @@ namespace SixLabors.Shapes
                 }
             }
 
-            return Simplify(simplified, isClosed);
+            // TODO: pool 'simplified' list
+            PointData[] result = Simplify(simplified, isClosed);
+
+            return result;
         }
 
         private static PointData[] Simplify(IEnumerable<PointF> vectors, bool isClosed)

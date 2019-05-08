@@ -33,6 +33,7 @@
 
   <PropertyGroup>
     <CodeAnalysisRuleSet>..\..\standards\SixLabors.ruleset</CodeAnalysisRuleSet>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -44,7 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\SixLabors.Fonts\src\SixLabors.Fonts\SixLabors.Fonts.csproj" />
+    <ProjectReference Include="..\..\..\Fonts\src\SixLabors.Fonts\SixLabors.Fonts.csproj" />
     <ProjectReference Include="..\SixLabors.Shapes\SixLabors.Shapes.csproj" />
   </ItemGroup>
 

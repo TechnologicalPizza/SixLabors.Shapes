@@ -18,21 +18,15 @@ namespace SixLabors.Shapes
         public static T[] Merge<T>(this T[] source1, T[] source2)
         {
             if (source2 is null)
-            {
                 return source1;
-            }
 
             T[] target = new T[source1.Length + source2.Length];
 
             for (int i = 0; i < source1.Length; i++)
-            {
                 target[i] = source1[i];
-            }
 
             for (int i = 0; i < source2.Length; i++)
-            {
                 target[i + source1.Length] = source2[i];
-            }
 
             return target;
         }
