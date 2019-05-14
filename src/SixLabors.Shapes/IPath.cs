@@ -9,10 +9,15 @@ using SixLabors.Primitives;
 namespace SixLabors.Shapes
 {
     /// <summary>
-    /// Represents a logic path that can be drawn
+    /// Represents a logic path that can be drawn.
     /// </summary>
-    public interface IPath
+    public interface IPath : IDisposable
     {
+        /// <summary>
+        /// Gets a value indicating whether this instance is usable.
+        /// </summary>
+        bool IsDisposed { get; }
+
         /// <summary>
         /// Gets a value indicating whether this instance is closed, open or a composite path with a mixture of open and closed figures.
         /// </summary>

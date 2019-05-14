@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -21,28 +22,31 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The line points.
         /// </summary>
-        private readonly List<PointF> linePoints;
-        private readonly PointF[] controlPoints;
+        private List<PointF> linePoints;
+        private List<PointF> _controlPoints;
+
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
+
+        internal CubicBezierLineSegment(List<PointF> points)
+        {
+            this._controlPoints = points ?? throw new ArgumentNullException(nameof(points));
+            Guard.MustBeGreaterThanOrEqualTo(this._controlPoints.Count, 4, nameof(points));
+
+            int correctPointCount = (this._controlPoints.Count - 1) % 3;
+            if (correctPointCount != 0)
+                throw new ArgumentOutOfRangeException(nameof(points), "Length must be a multiple of 3 plus 1.");
+
+            this.linePoints = GetDrawingPoints(this._controlPoints);
+            this.EndPoint = this._controlPoints[this._controlPoints.Count - 1];
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CubicBezierLineSegment"/> class.
         /// </summary>
         /// <param name="points">The points.</param>
-        public CubicBezierLineSegment(PointF[] points)
+        public CubicBezierLineSegment(PointF[] points) : this(PrimitiveListPools.PointF.Rent(points))
         {
-            this.controlPoints = points ?? throw new ArgumentNullException(nameof(points));
-
-            Guard.MustBeGreaterThanOrEqualTo(this.controlPoints.Length, 4, nameof(points));
-
-            int correctPointCount = (this.controlPoints.Length - 1) % 3;
-            if (correctPointCount != 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(points), "points must be a multiple of 3 plus 1 long.");
-            }
-
-            this.linePoints = GetDrawingPoints(this.controlPoints);
-
-            this.EndPoint = this.controlPoints[this.controlPoints.Length - 1];
         }
 
         /// <summary>
@@ -54,8 +58,23 @@ namespace SixLabors.Shapes
         /// <param name="end">The end.</param>
         /// <param name="additionalPoints">The additional points.</param>
         public CubicBezierLineSegment(PointF start, PointF controlPoint1, PointF controlPoint2, PointF end, params PointF[] additionalPoints)
-            : this(new[] { start, controlPoint1, controlPoint2, end }.Merge(additionalPoints))
+            : this(MergeConstructorValues(start, controlPoint1, controlPoint2, end, additionalPoints))
         {
+        }
+
+        private static List<PointF> MergeConstructorValues(
+            PointF start, PointF controlPoint1, PointF controlPoint2, PointF end, params PointF[] additionalPoints)
+        {
+            var list = PrimitiveListPools.PointF.Rent(4 + (additionalPoints?.Length).GetValueOrDefault());
+            list.Add(start);
+            list.Add(controlPoint1);
+            list.Add(controlPoint2);
+            list.Add(end);
+
+            if (additionalPoints != null)
+                foreach (var item in additionalPoints)
+                    list.Add(item);
+            return list;
         }
 
         /// <summary>
@@ -74,6 +93,8 @@ namespace SixLabors.Shapes
         /// </returns>
         public IReadOnlyList<PointF> Flatten()
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(CubicBezierLineSegment));
             return this.linePoints;
         }
 
@@ -84,18 +105,19 @@ namespace SixLabors.Shapes
         /// <returns>A line segment with the matrix applied to it.</returns>
         public CubicBezierLineSegment Transform(Matrix3x2 matrix)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(CubicBezierLineSegment));
+
             if (matrix.IsIdentity)
             {
                 // no transform to apply skip it
                 return this;
             }
 
-            var transformedPoints = new PointF[this.controlPoints.Length];
+            var transformedPoints = PrimitiveListPools.PointF.Rent(this._controlPoints.Count);
 
-            for (int i = 0; i < this.controlPoints.Length; i++)
-            {
-                transformedPoints[i] = PointF.Transform(this.controlPoints[i], matrix);
-            }
+            for (int i = 0; i < this._controlPoints.Count; i++)
+                transformedPoints[i] = PointF.Transform(this._controlPoints[i], matrix);
 
             return new CubicBezierLineSegment(transformedPoints);
         }
@@ -107,32 +129,32 @@ namespace SixLabors.Shapes
         /// <returns>A line segment with the matrix applied to it.</returns>
         ILineSegment ILineSegment.Transform(Matrix3x2 matrix) => this.Transform(matrix);
 
-        private static List<PointF> GetDrawingPoints(PointF[] controlPoints)
+        private static List<PointF> GetDrawingPoints(IList<PointF> controlPoints)
         {
-            var drawingPoints = new List<PointF>();
-            int curveCount = (controlPoints.Length - 1) / 3;
+            var drawingPoints = PrimitiveListPools.PointF.Rent();
+            int curveCount = (controlPoints.Count - 1) / 3;
 
-            // TODO: add pooling
-            var tmpList = new List<PointF>();
+            var tmp = PrimitiveListPools.PointF.Rent();
             for (int curveIndex = 0; curveIndex < curveCount; curveIndex++)
             {
-                FindDrawingPoints(curveIndex, controlPoints, tmpList);
+                FindDrawingPoints(curveIndex, controlPoints, tmp);
 
                 if (curveIndex != 0)
                 {
                     // remove the first point, as it coincides with the last point of the previous Bezier curve.
-                    tmpList.RemoveAt(0);
+                    tmp.RemoveAt(0);
                 }
 
-                foreach (var p in tmpList)
+                foreach (var p in tmp)
                     drawingPoints.Add(p);
-                tmpList.Clear();
+                tmp.Clear();
             }
+            PrimitiveListPools.PointF.Return(tmp);
 
             return drawingPoints;
         }
 
-        private static void FindDrawingPoints(int curveIndex, PointF[] controlPoints, List<PointF> output)
+        private static void FindDrawingPoints(int curveIndex, IList<PointF> controlPoints, IList<PointF> output)
         {
             Vector2 left = CalculateBezierPoint(curveIndex, 0, controlPoints);
             Vector2 right = CalculateBezierPoint(curveIndex, 1, controlPoints);
@@ -147,9 +169,9 @@ namespace SixLabors.Shapes
             int curveIndex,
             float t0,
             float t1,
-            List<PointF> pointList,
+            IList<PointF> pointList,
             int insertionIndex,
-            PointF[] controlPoints,
+            IList<PointF> controlPoints,
             int depth)
         {
             // max recursive depth for control points, means this is approx the max number of points discoverable
@@ -183,7 +205,7 @@ namespace SixLabors.Shapes
             return 0;
         }
 
-        private static PointF CalculateBezierPoint(int curveIndex, float t, PointF[] controlPoints)
+        private static PointF CalculateBezierPoint(int curveIndex, float t, IList<PointF> controlPoints)
         {
             int nodeIndex = curveIndex * 3;
 
@@ -221,6 +243,23 @@ namespace SixLabors.Shapes
             p += ttt * p3; // fourth term
 
             return p;
+        }
+
+        /// <summary>
+        /// Disposes the line, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                PrimitiveListPools.PointF.Return(linePoints);
+                linePoints = null;
+
+                PrimitiveListPools.PointF.Return(_controlPoints);
+                _controlPoints = null;
+
+                IsDisposed = true;
+            }
         }
     }
 }

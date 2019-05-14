@@ -4,7 +4,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using SixLabors.Primitives;
 
@@ -16,18 +15,21 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public class PathCollection : IPathCollection
     {
-        private static readonly Func<IPath, float> GetLeft = x => x.Bounds.Left;
-        private static readonly Func<IPath, float> GetRight = x => x.Bounds.Right;
-        private static readonly Func<IPath, float> GetTop = x => x.Bounds.Top;
-        private static readonly Func<IPath, float> GetBottom = x => x.Bounds.Bottom;
+        internal static readonly Func<IPath, float> GetLeft = x => x.Bounds.Left;
+        internal static readonly Func<IPath, float> GetRight = x => x.Bounds.Right;
+        internal static readonly Func<IPath, float> GetTop = x => x.Bounds.Top;
+        internal static readonly Func<IPath, float> GetBottom = x => x.Bounds.Bottom;
 
-        private readonly IPath[] paths;
+        private List<IPath> _paths;
+
+        /// <inheritdoc />
+        public bool IsDisposed { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PathCollection"/> class.
         /// </summary>
         /// <param name="paths">The collection of paths</param>
-        public PathCollection(IEnumerable<IPath> paths) : this(paths?.ToArray())
+        public PathCollection(IEnumerable<IPath> paths) : this(ShapeListPools.Path.Rent(paths))
         {
         }
 
@@ -35,23 +37,14 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="PathCollection"/> class.
         /// </summary>
         /// <param name="paths">The collection of paths</param>
-        public PathCollection(params IPath[] paths)
+        public PathCollection(params IPath[] paths) : this(ShapeListPools.Path.Rent(paths))
         {
-            this.paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        }
 
-            if (this.paths.Length == 0)
-            {
-                this.Bounds = new RectangleF(0, 0, 0, 0);
-            }
-            else
-            {
-                float minX = this.paths.FastMin(GetLeft);
-                float maxX = this.paths.FastMax(GetRight);
-                float minY = this.paths.FastMin(GetTop);
-                float maxY = this.paths.FastMax(GetBottom);
-
-                this.Bounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
-            }
+        internal PathCollection(List<IPath> paths)
+        {
+            _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+            Bounds = GetBounds(_paths);
         }
 
         /// <inheritdoc />
@@ -60,18 +53,55 @@ namespace SixLabors.Shapes
         /// <inheritdoc />
         public IPathCollection Transform(Matrix3x2 matrix)
         {
-            var result = new IPath[this.paths.Length];
+            List<IPath> result = ShapeListPools.Path.Rent(_paths.Count);
 
-            for (int i = 0; i < this.paths.Length && i < result.Length; i++)
-                result[i] = this.paths[i].Transform(matrix);
+            for (int i = 0; i < _paths.Count; i++)
+                result.Add(_paths[i].Transform(matrix));
 
             return new PathCollection(result);
         }
 
+        /// <summary>
+        /// Gets the bounds enclosing the path.
+        /// </summary>
+        /// <param name="paths">The given paths.</param>
+        /// <returns>The bounds of the paths.</returns>
+        public static RectangleF GetBounds(IReadOnlyList<IPath> paths)
+        {
+            if (paths.Count == 0)
+                return RectangleF.Empty;
+
+            float minX = paths.FastMin(GetLeft);
+            float maxX = paths.FastMax(GetRight);
+            float minY = paths.FastMin(GetTop);
+            float maxY = paths.FastMax(GetBottom);
+            return new RectangleF(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        /// <summary>
+        /// Returns an enumerator that iterates through the <see cref="PathCollection"/>.
+        /// </summary>
+        /// <returns></returns>
+        public List<IPath>.Enumerator GetEnumerator() => _paths.GetEnumerator();
+    
         /// <inheritdoc />
-        public IEnumerator<IPath> GetEnumerator() => ((IEnumerable<IPath>)this.paths).GetEnumerator();
+        IEnumerator<IPath> IEnumerable<IPath>.GetEnumerator() => GetEnumerator();
 
         /// <inheritdoc />
-        IEnumerator IEnumerable.GetEnumerator() => this.paths.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        
+        /// <summary>
+        /// Disposes the collection, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                ShapeListPools.Path.Return(_paths);
+                _paths = null;
+
+                IsDisposed = true;
+            }
+        }
     }
 }

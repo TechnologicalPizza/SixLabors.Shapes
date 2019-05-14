@@ -50,16 +50,12 @@ namespace SixLabors.Shapes
         public override IPath Transform(Matrix3x2 matrix)
         {
             if (matrix.IsIdentity)
-            {
                 return this;
-            }
 
-            ILineSegment[] segments = new ILineSegment[this.LineSegments.Count];
-            int i = 0;
-            foreach (ILineSegment s in this.LineSegments)
-            {
-                segments[i++] = s.Transform(matrix);
-            }
+            var segments = ShapeListPools.Line.Rent(this.LineSegments.Count);
+
+            for (int i = 0; i < LineSegments.Count; i++)
+                segments[i] = LineSegments[i].Transform(matrix);
 
             return new Polygon(segments);
         }

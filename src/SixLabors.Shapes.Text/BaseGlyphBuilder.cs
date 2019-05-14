@@ -31,12 +31,18 @@ namespace SixLabors.Shapes.Text
             _currentPoint = default;
         }
 
-        /// <summary>
-        /// Gets the paths that have been rendered by this.
-        /// </summary>
+        /// <inheritdoc/>
         public IPathCollection BuildPath()
         {
-            return new PathCollection(this._paths.ToArray());
+            return new PathCollection(this._paths);
+        }
+
+        /// <inheritdoc/>
+        public RectangleF GetPath(ICollection<IPath> output)
+        {
+            foreach (var path in _paths)
+                output.Add(path);
+            return PathCollection.GetBounds(_paths);
         }
 
         /// <inheritdoc/>

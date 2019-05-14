@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -13,16 +14,18 @@ namespace SixLabors.Shapes
     /// </summary>
     public class EllipsePolygon : IPath, ISimplePath
     {
-        private readonly InternalPath innerPath;
-        private readonly CubicBezierLineSegment segment;
+        private InternalPath innerPath;
+        private CubicBezierLineSegment segment;
+
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EllipsePolygon" /> class.
         /// </summary>
         /// <param name="location">The location the center of the ellipse will be placed.</param>
         /// <param name="size">The width/hight of the final ellipse.</param>
-        public EllipsePolygon(PointF location, SizeF size)
-            : this(CreateSegment(location, size))
+        public EllipsePolygon(PointF location, SizeF size) : this(CreateSegment(location, size))
         {
         }
 
@@ -31,8 +34,7 @@ namespace SixLabors.Shapes
         /// </summary>
         /// <param name="location">The location the center of the circle will be placed.</param>
         /// <param name="radius">The radius final circle.</param>
-        public EllipsePolygon(PointF location, float radius)
-            : this(location, new SizeF(radius * 2, radius * 2))
+        public EllipsePolygon(PointF location, float radius) : this(location, new SizeF(radius * 2, radius * 2))
         {
         }
 
@@ -43,8 +45,7 @@ namespace SixLabors.Shapes
         /// <param name="y">The Y coordinate of the center of the ellipse.</param>
         /// <param name="width">The width the ellipse should have.</param>
         /// <param name="height">The height the ellipse should have.</param>
-        public EllipsePolygon(float x, float y, float width, float height)
-            : this(new PointF(x, y), new SizeF(width, height))
+        public EllipsePolygon(float x, float y, float width, float height) : this(new PointF(x, y), new SizeF(width, height))
         {
         }
 
@@ -54,15 +55,14 @@ namespace SixLabors.Shapes
         /// <param name="x">The X coordinate of the center of the circle.</param>
         /// <param name="y">The Y coordinate of the center of the circle.</param>
         /// <param name="radius">The radius final circle.</param>
-        public EllipsePolygon(float x, float y, float radius)
-            : this(new PointF(x, y), new SizeF(radius * 2, radius * 2))
+        public EllipsePolygon(float x, float y, float radius) : this(new PointF(x, y), new SizeF(radius * 2, radius * 2))
         {
         }
 
         private EllipsePolygon(CubicBezierLineSegment segment)
         {
             this.segment = segment;
-            this.innerPath = new InternalPath(segment, true);
+            this.innerPath = new InternalPath(segment, isClosedPath: true);
         }
 
         /// <summary>
@@ -97,9 +97,7 @@ namespace SixLabors.Shapes
             PointInfo dist = this.innerPath.DistanceFromPath(point);
             bool isInside = this.innerPath.PointInPolygon(point);
             if (isInside)
-            {
                 dist.DistanceFromPath *= -1;
-            }
 
             return dist;
         }
@@ -113,9 +111,11 @@ namespace SixLabors.Shapes
         /// </returns>
         public EllipsePolygon Transform(Matrix3x2 matrix)
         {
-            return matrix.IsIdentity
-                ? this
-                : new EllipsePolygon(this.segment.Transform(matrix));
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(EllipsePolygon));
+
+            return matrix.IsIdentity ?
+                this : new EllipsePolygon(this.segment.Transform(matrix));
         }
 
         /// <summary>
@@ -134,7 +134,7 @@ namespace SixLabors.Shapes
         IPath IPath.AsClosedPath() => this;
 
         /// <summary>
-        /// Converts the <see cref="IPath" /> into a simple linear path..
+        /// Converts the <see cref="IPath" /> into a simple linear path.
         /// </summary>
         /// <returns>
         /// Returns the current <see cref="IPath" /> as simple linear path.
@@ -178,8 +178,8 @@ namespace SixLabors.Shapes
 
         private static CubicBezierLineSegment CreateSegment(Vector2 location, SizeF size)
         {
-            Guard.MustBeGreaterThan(size.Width, 0, "width");
-            Guard.MustBeGreaterThan(size.Height, 0, "height");
+            Guard.MustBeGreaterThan(size.Width, 0, nameof(size.Width));
+            Guard.MustBeGreaterThan(size.Height, 0, nameof(size.Height));
 
             const float kappa = 0.5522848f;
 
@@ -194,28 +194,40 @@ namespace SixLabors.Shapes
             Vector2 pointMminusO = pointM - pointO;
             Vector2 pointMplusO = pointM + pointO;
 
-            PointF[] points =
+            var list = PrimitiveListPools.PointF.Rent(1 + 3 * 4);
+            list.Add(new Vector2(rootLocation.X, pointM.Y));
+
+            list.Add(new Vector2(rootLocation.X, pointMminusO.Y));
+            list.Add(new Vector2(pointMminusO.X, rootLocation.Y));
+            list.Add(new Vector2(pointM.X, rootLocation.Y));
+
+            list.Add(new Vector2(pointMplusO.X, rootLocation.Y));
+            list.Add(new Vector2(pointE.X, pointMminusO.Y));
+            list.Add(new Vector2(pointE.X, pointM.Y));
+
+            list.Add(new Vector2(pointE.X, pointMplusO.Y));
+            list.Add(new Vector2(pointMplusO.X, pointE.Y));
+            list.Add(new Vector2(pointM.X, pointE.Y));
+
+            list.Add(new Vector2(pointMminusO.X, pointE.Y));
+            list.Add(new Vector2(rootLocation.X, pointMplusO.Y));
+            list.Add(new Vector2(rootLocation.X, pointM.Y));
+
+            return new CubicBezierLineSegment(list);
+        }
+
+        /// <summary>
+        /// Disposes the polygon, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
             {
-                new Vector2(rootLocation.X, pointM.Y),
+                innerPath.Dispose();
+                segment = null;
 
-                new Vector2(rootLocation.X, pointMminusO.Y),
-                new Vector2(pointMminusO.X, rootLocation.Y),
-                new Vector2(pointM.X, rootLocation.Y),
-
-                new Vector2(pointMplusO.X, rootLocation.Y),
-                new Vector2(pointE.X, pointMminusO.Y),
-                new Vector2(pointE.X, pointM.Y),
-
-                new Vector2(pointE.X, pointMplusO.Y),
-                new Vector2(pointMplusO.X, pointE.Y),
-                new Vector2(pointM.X, pointE.Y),
-
-                new Vector2(pointMminusO.X, pointE.Y),
-                new Vector2(rootLocation.X, pointMplusO.Y),
-                new Vector2(rootLocation.X, pointM.Y),
-            };
-
-            return new CubicBezierLineSegment(points);
+                IsDisposed = true;
+            }
         }
     }
 }

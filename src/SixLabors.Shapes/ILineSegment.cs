@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Six Labors and contributors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using SixLabors.Primitives;
@@ -10,14 +11,17 @@ namespace SixLabors.Shapes
     /// <summary>
     /// Represents a simple path segment
     /// </summary>
-    public interface ILineSegment
+    public interface ILineSegment : IDisposable
     {
+        /// <summary>
+        /// Gets a value indicating whether this instance is usable.
+        /// </summary>
+        bool IsDisposed { get; }
+
         /// <summary>
         /// Gets the end point.
         /// </summary>
-        /// <value>
-        /// The end point.
-        /// </value>
+        /// <value>The end point.</value>
         PointF EndPoint { get; }
 
         /// <summary>

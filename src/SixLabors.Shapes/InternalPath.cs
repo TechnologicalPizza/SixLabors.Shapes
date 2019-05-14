@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -34,19 +35,22 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The points.
         /// </summary>
-        private readonly PointData[] _points;
+        private List<PointData> _points;
 
         /// <summary>
         /// The closed path.
         /// </summary>
         private readonly bool closedPath;
 
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="InternalPath"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
         /// <param name="isClosedPath">if set to <c>true</c> [is closed path].</param>
-        internal InternalPath(ILineSegment[] segments, bool isClosedPath)
+        internal InternalPath(IEnumerable<ILineSegment> segments, bool isClosedPath)
             : this(Simplify(segments, isClosedPath), isClosedPath)
         {
         }
@@ -76,7 +80,7 @@ namespace SixLabors.Shapes
         /// </summary>
         /// <param name="points">The points.</param>
         /// <param name="isClosedPath">if set to <c>true</c> [is closed path].</param>
-        private InternalPath(PointData[] points, bool isClosedPath)
+        private InternalPath(List<PointData> points, bool isClosedPath)
         {
             _points = points;
             closedPath = isClosedPath;
@@ -91,9 +95,9 @@ namespace SixLabors.Shapes
         }
 
         /// <summary>
-        /// the orrientateion of an point form a line
+        /// The orientation of an point form a line
         /// </summary>
-        private enum Orientation
+        internal enum Orientation
         {
             /// <summary>
             /// Point is colienear
@@ -130,7 +134,15 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets the length.
         /// </summary>
-        public int PointCount => _points.Length;
+        public int PointCount
+        {
+            get
+            {
+                if (IsDisposed)
+                    throw new ObjectDisposedException(nameof(InternalPath));
+                return _points.Count;
+            }
+        }
 
         /// <summary>
         /// Calculates the distance from the path.
@@ -139,29 +151,26 @@ namespace SixLabors.Shapes
         /// <returns>Returns the distance from the path</returns>
         public PointInfo DistanceFromPath(PointF point)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(InternalPath));
+
             PointInfoInternal internalInfo = default;
             internalInfo.DistanceSquared = float.MaxValue; // Set it to max so that CalculateShorterDistance can reduce it back down
 
-            int polyCorners = _points.Length;
+            int polyCorners = _points.Count;
 
             if (!closedPath)
-            {
                 polyCorners -= 1;
-            }
 
             int closestPoint = 0;
             for (int i = 0; i < polyCorners; i++)
             {
                 int next = i + 1;
                 if (closedPath && next == polyCorners)
-                {
                     next = 0;
-                }
 
                 if (CalculateShorterDistance(_points[i].Point, _points[next].Point, point, ref internalInfo))
-                {
                     closestPoint = i;
-                }
             }
 
             return new PointInfo
@@ -183,10 +192,11 @@ namespace SixLabors.Shapes
         /// <returns>number of intersections hit</returns>
         public int FindIntersections(PointF start, PointF end, Span<PointF> buffer)
         {
-            if (_points.Length < 2)
-            {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(InternalPath));
+
+            if (_points.Count < 2)
                 return 0;
-            }
 
             int count = buffer.Length;
 
@@ -194,17 +204,15 @@ namespace SixLabors.Shapes
 
             var target = new Segment(start, end);
 
-            int polyCorners = _points.Length;
+            int polyCorners = _points.Count;
 
             if (!closedPath)
-            {
                 polyCorners -= 1;
-            }
 
             int position = 0;
             Vector2 lastPoint = MaxVector;
 
-            PassPointData[] precaclulate = ArrayPool<PassPointData>.Shared.Rent(_points.Length);
+            PassPointData[] precaclulate = ArrayPool<PassPointData>.Shared.Rent(_points.Count);
 
             try
             {
@@ -217,12 +225,12 @@ namespace SixLabors.Shapes
                 // iterate over all points and precalculate data about each, pre cacluating it relative orientation
                 for (int i = 0; i < polyCorners && count > 0; i++)
                 {
-                    ref Segment edge = ref _points[i].Segment;
+                    Segment edge = _points[i].Segment;
 
                     // shift all orientations along but one place and fill in the last one
                     Orientation pointOrientation = nextOrientation;
                     nextOrientation = nextPlus1Orientation;
-                    nextPlus1Orientation = CalulateOrientation(startToEnd, _points[WrapArrayIndex(i + 2, _points.Length)].Point - end);
+                    nextPlus1Orientation = CalulateOrientation(startToEnd, _points[WrapArrayIndex(i + 2, _points.Count)].Point - end);
 
                     // should this point cause the last matched point to be excluded
                     bool removeLastIntersection = nextOrientation == Orientation.Colinear &&
@@ -257,14 +265,12 @@ namespace SixLabors.Shapes
                     int prev = polyCorners - 1;
 
                     if (precaclulate[prev].DoIntersect)
-                    {
                         lastPoint = FindIntersection(_points[prev].Segment, target);
-                    }
                 }
 
                 for (int i = 0; i < polyCorners && count > 0; i++)
                 {
-                    int next = WrapArrayIndex(i + 1, _points.Length);
+                    int next = WrapArrayIndex(i + 1, _points.Count);
 
                     if (precaclulate[i].RemoveLastIntersectionAndSkip)
                     {
@@ -282,22 +288,18 @@ namespace SixLabors.Shapes
                         Vector2 point = FindIntersection(_points[i].Segment, target);
                         if (point != MaxVector)
                         {
-                            if (lastPoint.Equivelent(point, Epsilon2))
+                            if (lastPoint.Equivalent(point, Epsilon2))
                             {
                                 lastPoint = MaxVector;
 
                                 int last = WrapArrayIndex(i - 1 + polyCorners, polyCorners);
 
                                 // hit the same point a second time do we need to remove the old one if just clipping
-                                if (_points[next].Point.Equivelent(point, Epsilon))
-                                {
+                                if (_points[next].Point.Equivalent(point, Epsilon))
                                     next = i;
-                                }
 
-                                if (_points[last].Point.Equivelent(point, Epsilon))
-                                {
+                                if (_points[last].Point.Equivalent(point, Epsilon))
                                     last = i;
-                                }
 
                                 Orientation side = precaclulate[next].RelativeOrientation;
                                 Orientation side2 = precaclulate[last].RelativeOrientation;
@@ -338,34 +340,29 @@ namespace SixLabors.Shapes
         /// <returns>Returns true if the point is inside the closed path.</returns>
         public bool PointInPolygon(PointF point)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(InternalPath));
+
             // You can only be inside a path if its "closed"
             if (!closedPath)
-            {
                 return false;
-            }
 
             if (!Bounds.Contains(point))
-            {
                 return false;
-            }
 
             // if it hit any points then class it as inside
-            PointF[] buffer = ArrayPool<PointF>.Shared.Rent(_points.Length);
+            PointF[] buffer = ArrayPool<PointF>.Shared.Rent(_points.Count);
             try
             {
                 int intersection = FindIntersections(point, new Vector2(Bounds.Left - 1, Bounds.Top - 1), buffer);
                 if ((intersection & 1) == 1)
-                {
                     return true;
-                }
 
                 // check if the point is on an intersection is it is then inside
                 for (int i = 0; i < intersection; i++)
                 {
-                    if (buffer[i].Equivelent(point, Epsilon))
-                    {
+                    if (buffer[i].Equivalent(point, Epsilon))
                         return true;
-                    }
                 }
             }
             finally
@@ -382,7 +379,7 @@ namespace SixLabors.Shapes
         /// <returns>The <see cref="List{PointF}"/></returns>
         internal List<PointF> Points()
         {
-            var list = new List<PointF>(_points.Length);
+            var list = new List<PointF>(_points.Count);
             foreach (var pointData in _points)
                 list.Add(pointData.Point);
             return list;
@@ -397,6 +394,9 @@ namespace SixLabors.Shapes
         /// </returns>
         internal SegmentInfo PointAlongPath(float distanceAlongPath)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(InternalPath));
+
             distanceAlongPath %= Length;
             int pointCount = PointCount;
             if (closedPath)
@@ -585,174 +585,182 @@ namespace SixLabors.Shapes
         /// <returns>
         /// The <see cref="T:PointData[]"/>.
         /// </returns>
-        private static PointData[] Simplify(ILineSegment[] segments, bool isClosed)
+        private static List<PointData> Simplify(IEnumerable<ILineSegment> segments, bool isClosed)
         {
-            var simplified = new List<PointF>();
-            foreach (var segment in segments)
+            var simplified = PrimitiveListPools.PointF.Rent();
+            try
             {
-                var flatSegment = segment.Flatten();
-                if (flatSegment is PointF[] array)
+                void Body(ILineSegment segment)
                 {
-                    foreach (var point in array)
-                        simplified.Add(point);
+                    var flatSegment = segment.Flatten();
+                    if (flatSegment is PointF[] array)
+                    {
+                        foreach (var point in array)
+                            simplified.Add(point);
+                    }
+                    else if (flatSegment is IList<PointF> l)
+                    {
+                        int c = l.Count;
+                        for (int i = 0; i < c; i++)
+                            simplified.Add(l[i]);
+                    }
+                    else
+                    {
+                        foreach (var point in flatSegment)
+                            simplified.Add(point);
+                    }
                 }
-                else if (flatSegment is List<PointF> list)
+
+                if (segments is IList<ILineSegment> list)
                 {
-                    foreach (var point in list)
-                        simplified.Add(point);
+                    int c = list.Count;
+                    for (int i = 0; i < c; i++)
+                        Body(list[i]);
                 }
                 else
                 {
-                    foreach (var point in flatSegment)
-                        simplified.Add(point);
+                    foreach (var segment in segments)
+                        Body(segment);
                 }
+                return Simplify(simplified, isClosed);
             }
-
-            // TODO: pool 'simplified' list
-            PointData[] result = Simplify(simplified, isClosed);
-
-            return result;
+            finally
+            {
+                PrimitiveListPools.PointF.Return(simplified);
+            }
         }
 
-        private static PointData[] Simplify(IEnumerable<PointF> vectors, bool isClosed)
+        private static List<PointData> Simplify(IEnumerable<PointF> vectors, bool isClosed)
         {
-            var points = vectors is IList<PointF> list ? list : vectors.ToArray();
-            Vector2 lastPoint = points[0];
-
-            int polyCorners = points.Count;
-            var results = new List<PointData>();
-
-            if (!isClosed)
+            bool prematureReturn = false;
+            var tmp = ShapeListPools.PointData.Rent();
+            try
             {
-                results.Add(new PointData
-                {
-                    Point = points[0],
-                    Orientation = Orientation.Colinear,
-                    Length = 0
-                });
-            }
-            else
-            {
-                int prev = polyCorners;
-                do
-                {
-                    prev--;
-                    if (prev == 0)
-                    {
-                        // all points are common, shouldn't match anything
-                        results.Add(
-                            new PointData
-                            {
-                                Point = points[0],
-                                Orientation = Orientation.Colinear,
-                                Segment = new Segment(points[0], points[1]),
-                                Length = 0,
-                                TotalLength = 0
-                            });
-                        return results.ToArray();
-                    }
-                }
-                while (points[0].Equivelent(points[prev], Epsilon2)); // skip points too close together
+                var points = vectors is IList<PointF> list ? list : vectors.ToArray();
+                int polyCorners = points.Count;
+                Vector2 lastPoint = points[0];
 
-                polyCorners = prev + 1;
-                lastPoint = points[prev];
-
-                results.Add(
-                    new PointData
+                if (!isClosed)
+                {
+                    tmp.Add(new PointData
                     {
                         Point = points[0],
-                        Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
-                        Length = Vector2.Distance(lastPoint, points[0]),
-                        TotalLength = 0
+                        Orientation = Orientation.Colinear,
+                        Length = 0
                     });
-
-                lastPoint = points[0];
-            }
-
-            float totalDist = 0;
-            for (int i = 1; i < polyCorners; i++)
-            {
-                int next = WrapArrayIndex(i + 1, polyCorners);
-                Orientation or = CalulateOrientation(lastPoint, points[i], points[next]);
-                if (or == Orientation.Colinear && next != 0)
-                {
-                    continue;
                 }
-
-                float dist = Vector2.Distance(lastPoint, points[i]);
-                totalDist += dist;
-                results.Add(
-                    new PointData
+                else
+                {
+                    int prev = polyCorners;
+                    do
                     {
-                        Point = points[i],
-                        Orientation = or,
-                        Length = dist,
-                        TotalLength = totalDist
-                    });
-                lastPoint = points[i];
-            }
+                        prev--;
+                        if (prev == 0)
+                        {
+                            // all points are common, shouldn't match anything
+                            tmp.Add(
+                                new PointData
+                                {
+                                    Point = points[0],
+                                    Orientation = Orientation.Colinear,
+                                    Segment = new Segment(points[0], points[1]),
+                                    Length = 0,
+                                    TotalLength = 0
+                                });
+                            prematureReturn = true;
+                            return tmp;
+                        }
+                    }
+                    while (points[0].Equivalent(points[prev], Epsilon2)); // skip points too close together
 
-            if (isClosed)
-            {
-                // walk back removing collinear points
-                while (results.Count > 2 && results[results.Count - 1].Orientation == Orientation.Colinear)
-                {
-                    results.RemoveAt(results.Count - 1);
+                    polyCorners = prev + 1;
+                    lastPoint = points[prev];
+
+                    tmp.Add(
+                        new PointData
+                        {
+                            Point = points[0],
+                            Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
+                            Length = Vector2.Distance(lastPoint, points[0]),
+                            TotalLength = 0
+                        });
+
+                    lastPoint = points[0];
                 }
-            }
 
-            PointData[] data = results.ToArray();
-            for (int i = 0; i < data.Length; i++)
+                float totalDist = 0;
+                for (int i = 1; i < polyCorners; i++)
+                {
+                    int next = WrapArrayIndex(i + 1, polyCorners);
+                    Orientation or = CalulateOrientation(lastPoint, points[i], points[next]);
+                    if (or == Orientation.Colinear && next != 0)
+                        continue;
+
+                    float dist = Vector2.Distance(lastPoint, points[i]);
+                    totalDist += dist;
+                    tmp.Add(
+                        new PointData
+                        {
+                            Point = points[i],
+                            Orientation = or,
+                            Length = dist,
+                            TotalLength = totalDist
+                        });
+                    lastPoint = points[i];
+                }
+
+                if (isClosed)
+                {
+                    // walk back removing collinear points
+                    while (tmp.Count > 2 && tmp[tmp.Count - 1].Orientation == Orientation.Colinear)
+                        tmp.RemoveAt(tmp.Count - 1);
+                }
+
+                var result = ShapeListPools.PointData.Rent(tmp);
+                for (int i = 0; i < tmp.Count; i++)
+                {
+                    int nextIndex = WrapArrayIndex(i + 1, tmp.Count);
+                    PointData current = i >= result.Count ? default : result[i];
+                    PointData next = nextIndex >= result.Count ? default : result[nextIndex];
+
+                    current.Segment = new Segment(current.Point, next.Point);
+                    result.Insert(i, current);
+                }
+                return result;
+            }
+            finally
             {
-                int next = WrapArrayIndex(i + 1, data.Length);
-                data[i].Segment = new Segment(data[i].Point, data[next].Point);
+                if(!prematureReturn)
+                    ShapeListPools.PointData.Return(tmp);
             }
-
-            return data;
         }
 
         private void ClampPoints(ref PointF start, ref PointF end)
         {
             // clean up start and end points
             if (start.X == float.MaxValue)
-            {
                 start.X = Bounds.Right + 1;
-            }
 
             if (start.X == float.MinValue)
-            {
                 start.X = Bounds.Left - 1;
-            }
 
             if (end.X == float.MaxValue)
-            {
                 end.X = Bounds.Right + 1;
-            }
 
             if (end.X == float.MinValue)
-            {
                 end.X = Bounds.Left - 1;
-            }
 
             if (start.Y == float.MaxValue)
-            {
                 start.Y = Bounds.Bottom + 1;
-            }
 
             if (start.Y == float.MinValue)
-            {
                 start.Y = Bounds.Top - 1;
-            }
 
             if (end.Y == float.MaxValue)
-            {
                 end.Y = Bounds.Bottom + 1;
-            }
 
             if (end.Y == float.MinValue)
-            {
                 end.Y = Bounds.Top - 1;
-            }
         }
 
         /// <summary>
@@ -764,12 +772,10 @@ namespace SixLabors.Shapes
         private float CalculateLength()
         {
             float length = 0;
-            int polyCorners = _points.Length;
+            int polyCorners = _points.Count;
 
             if (!closedPath)
-            {
                 polyCorners -= 1;
-            }
 
             for (int i = 0; i < polyCorners; i++)
             {
@@ -797,7 +803,6 @@ namespace SixLabors.Shapes
         private bool CalculateShorterDistance(Vector2 start, Vector2 end, Vector2 point, ref PointInfoInternal info)
         {
             Vector2 diffEnds = end - start;
-
             float lengthSquared = diffEnds.LengthSquared();
             Vector2 diff = point - start;
 
@@ -805,20 +810,13 @@ namespace SixLabors.Shapes
             float u = (multiplied.X + multiplied.Y) / lengthSquared;
 
             if (u > 1)
-            {
                 u = 1;
-            }
             else if (u < 0)
-            {
                 u = 0;
-            }
 
             Vector2 multipliedByU = diffEnds * u;
-
             Vector2 pointOnLine = start + multipliedByU;
-
             Vector2 d = pointOnLine - point;
-
             float dist = d.LengthSquared();
 
             if (info.DistanceSquared > dist)
@@ -829,6 +827,20 @@ namespace SixLabors.Shapes
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Disposes the path, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                ShapeListPools.PointData.Return(_points);
+                _points = null;
+
+                IsDisposed = true;
+            }
         }
 
         /// <summary>
@@ -847,7 +859,7 @@ namespace SixLabors.Shapes
             public PointF PointOnLine;
         }
 
-        private struct PointData
+        internal struct PointData
         {
             public PointF Point;
             public Orientation Orientation;
@@ -864,7 +876,7 @@ namespace SixLabors.Shapes
             public bool DoIntersect;
         }
 
-        private readonly struct Segment
+        internal readonly struct Segment
         {
             public readonly PointF Start;
             public readonly PointF End;

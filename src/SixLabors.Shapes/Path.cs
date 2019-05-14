@@ -15,14 +15,22 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public class Path : IPath, ISimplePath
     {
-        private readonly ILineSegment[] lineSegments;
+        private List<ILineSegment> _lineSegments;
         private InternalPath innerPath;
+
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
+
+        internal Path(List<ILineSegment> segments)
+        {
+            _lineSegments = segments ?? throw new ArgumentNullException(nameof(segments));
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Path"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
-        public Path(IEnumerable<ILineSegment> segments) : this(segments?.ToArray())
+        public Path(IEnumerable<ILineSegment> segments) : this(ShapeListPools.Line.Rent(segments))
         {
         }
 
@@ -38,9 +46,8 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="Path"/> class.
         /// </summary>
         /// <param name="segments">The segments.</param>
-        public Path(params ILineSegment[] segments)
+        public Path(params ILineSegment[] segments) : this(ShapeListPools.Line.Rent(segments))
         {
-            this.lineSegments = segments ?? throw new ArgumentNullException(nameof(segments));
         }
 
         /// <summary>
@@ -74,14 +81,22 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets the line segments
         /// </summary>
-        public IReadOnlyList<ILineSegment> LineSegments => this.lineSegments;
+        public IReadOnlyList<ILineSegment> LineSegments => this._lineSegments;
 
         /// <summary>
         /// Gets a value indicating whether this instance is a closed path.
         /// </summary>
         protected virtual bool IsClosed => false;
 
-        private InternalPath InnerPath => this.innerPath ?? (this.innerPath = new InternalPath(this.lineSegments, this.IsClosed));
+        private InternalPath InnerPath
+        {
+            get
+            {
+                if (IsDisposed)
+                    throw new ObjectDisposedException(nameof(Path));
+                return this.innerPath ?? (this.innerPath = new InternalPath(this._lineSegments, this.IsClosed));
+            }
+        }
 
         /// <inheritdoc />
         public PointInfo Distance(PointF point)
@@ -110,16 +125,12 @@ namespace SixLabors.Shapes
         public virtual IPath Transform(Matrix3x2 matrix)
         {
             if (matrix.IsIdentity)
-            {
                 return this;
-            }
 
-            var segments = new ILineSegment[this.lineSegments.Length];
+            var segments = ShapeListPools.Line.Rent(this._lineSegments.Count);
 
-            for (int i = 0; i < this.LineSegments.Count; i++)
-            {
-                segments[i] = this.lineSegments[i].Transform(matrix);
-            }
+            for (int i = 0; i < this._lineSegments.Count; i++)
+                segments[i] = this._lineSegments[i].Transform(matrix);
 
             return new Path(segments);
         }
@@ -136,7 +147,8 @@ namespace SixLabors.Shapes
             }
             else
             {
-                return new Polygon(this.LineSegments.ToArray());
+                var list = ShapeListPools.Line.Rent(this._lineSegments);
+                return new Polygon(list);
             }
         }
 
@@ -195,6 +207,24 @@ namespace SixLabors.Shapes
         public SegmentInfo PointAlongPath(float distanceAlongPath)
         {
             return this.InnerPath.PointAlongPath(distanceAlongPath);
+        }
+        
+        /// <summary>
+        /// Disposes the path, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                innerPath.Dispose();
+
+                foreach (var line in _lineSegments)
+                    line.Dispose();
+                ShapeListPools.Line.Return(_lineSegments);
+                _lineSegments = null;
+
+                IsDisposed = true;
+            }
         }
     }
 }

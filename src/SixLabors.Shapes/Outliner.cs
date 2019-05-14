@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using ClipperLib;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -72,12 +73,12 @@ namespace SixLabors.Shapes
         /// <param name="jointStyle">The style to render the joints.</param>
         /// <param name="patternSectionCapStyle">The style to render between sections of the specified pattern.</param>
         /// <returns>A new path representing the outline.</returns>
-        public static IPath GenerateOutline(this IPath path, float width, ReadOnlySpan<float> pattern, bool startOff, JointStyle jointStyle = JointStyle.Square, EndCapStyle patternSectionCapStyle = EndCapStyle.Butt)
+        public static IPath GenerateOutline(
+            this IPath path, float width, ReadOnlySpan<float> pattern, bool startOff,
+            JointStyle jointStyle = JointStyle.Square, EndCapStyle patternSectionCapStyle = EndCapStyle.Butt)
         {
             if (pattern.Length < 2)
-            {
                 return path.GenerateOutline(width);
-            }
 
             var style = Convert(jointStyle);
             var patternSectionCap = Convert(patternSectionCapStyle);
@@ -92,24 +93,23 @@ namespace SixLabors.Shapes
             var buffer = new List<IntPoint>(3);
             foreach (ISimplePath p in paths)
             {
+                var points = p.Points;
                 bool online = !startOff;
                 float targetLength = pattern[0] * width;
                 int patternPos = 0;
 
                 // Create a new list of points representing the new outline
-                int pCount = p.Points.Count;
+                int pCount = points.Count;
                 if (!p.IsClosed)
-                {
                     pCount--;
-                }
 
                 int i = 0;
-                Vector2 currentPoint = p.Points[0];
+                Vector2 currentPoint = points[0];
 
                 while (i < pCount)
                 {
-                    int next = (i + 1) % p.Points.Count;
-                    Vector2 targetPoint = p.Points[next];
+                    int next = (i + 1) % points.Count;
+                    Vector2 targetPoint = points[next];
                     float distToNext = Vector2.Distance(currentPoint, targetPoint);
                     if (distToNext > targetLength)
                     {
@@ -148,18 +148,12 @@ namespace SixLabors.Shapes
                 if (buffer.Count > 0)
                 {
                     if (p.IsClosed)
-                    {
-                        buffer.Add(p.Points.First().ToPoint());
-                    }
+                        buffer.Add(points[0].ToPoint());
                     else
-                    {
-                        buffer.Add(p.Points.Last().ToPoint());
-                    }
+                        buffer.Add(points[points.Count - 1].ToPoint());
 
                     if (online)
-                    {
                         offset.AddPath(buffer, style, patternSectionCap);
-                    }
 
                     online = !online;
 
@@ -203,11 +197,12 @@ namespace SixLabors.Shapes
             foreach (ISimplePath p in paths)
             {
                 IReadOnlyList<PointF> vectors = p.Points;
-
                 var points = new List<IntPoint>(vectors.Count);
-                foreach (Vector2 v in vectors)
+                for (int i = 0; i < vectors.Count; i++)
+                {
+                    var v = vectors[i];
                     points.Add(new IntPoint(v.X * ScalingFactor, v.Y * ScalingFactor));
-
+                }
                 EndType type = p.IsClosed ? EndType.etClosedLine : openEndCapStyle;
                 offset.AddPath(points, style, type);
             }
@@ -219,19 +214,20 @@ namespace SixLabors.Shapes
         {
             var tree = new List<List<IntPoint>>();
             offset.Execute(ref tree, width * ScalingFactor / 2);
-            var polygons = new List<Polygon>();
+            var polygons = ShapeListPools.Path.Rent();
 
-            var points = new List<PointF>();
+            var tmp = PrimitiveListPools.PointF.Rent();
             foreach (List<IntPoint> pt in tree)
             {
                 foreach (var point in pt)
-                    points.Add(new PointF(point.X / ScalingFactor, point.Y / ScalingFactor));
+                    tmp.Add(new PointF(point.X / ScalingFactor, point.Y / ScalingFactor));
 
-                polygons.Add(new Polygon(new LinearLineSegment(points.ToArray())));
-                points.Clear();
+                polygons.Add(new Polygon(new LinearLineSegment(PrimitiveListPools.PointF.Rent(tmp))));
+                tmp.Clear();
             }
+            PrimitiveListPools.PointF.Return(tmp);
 
-            return new ComplexPolygon(polygons.ToArray());
+            return new ComplexPolygon(polygons);
         }
 
         private static IntPoint ToPoint(this PointF vector)

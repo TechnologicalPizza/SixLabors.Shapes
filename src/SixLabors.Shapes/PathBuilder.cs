@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -12,14 +13,19 @@ namespace SixLabors.Shapes
     /// <summary>
     /// Allow you to derivatively build shapes and paths.
     /// </summary>
-    public class PathBuilder
+    public class PathBuilder : IDisposable
     {
-        private readonly List<Figure> figures = new List<Figure>();
+        private readonly List<Figure> _figures;
         private readonly Matrix3x2 defaultTransform;
 
         private Figure currentFigure;
         private Matrix3x2 currentTransform;
         private Matrix3x2 setTransform;
+
+        /// <summary>
+        /// Gets the object validity.
+        /// </summary>
+        public bool IsDisposed { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PathBuilder" /> class.
@@ -34,6 +40,7 @@ namespace SixLabors.Shapes
         /// <param name="defaultTransform">The default transform.</param>
         public PathBuilder(Matrix3x2 defaultTransform)
         {
+            _figures = new List<Figure>();
             this.defaultTransform = defaultTransform;
             this.currentFigure = new Figure();
             this.Clear();
@@ -123,9 +130,7 @@ namespace SixLabors.Shapes
         public PathBuilder AddLines(IEnumerable<PointF> points)
         {
             if (points is null)
-            {
                 throw new ArgumentNullException(nameof(points));
-            }
 
             this.AddLines(points.ToArray());
             return this;
@@ -201,7 +206,7 @@ namespace SixLabors.Shapes
             if (!this.currentFigure.IsEmpty)
             {
                 this.currentFigure = new Figure();
-                this.figures.Add(this.currentFigure);
+                this._figures.Add(this.currentFigure);
             }
             else
             {
@@ -227,7 +232,7 @@ namespace SixLabors.Shapes
         /// <returns>The <see cref="PathBuilder"/></returns>
         public PathBuilder CloseAllFigures()
         {
-            foreach (Figure f in this.figures)
+            foreach (Figure f in this._figures)
                 f.IsClosed = true;
             
             this.CloseFigure();
@@ -244,7 +249,7 @@ namespace SixLabors.Shapes
         public IPath Build()
         {
             int count = 0;
-            foreach (var x in figures)
+            foreach (var x in _figures)
                 if (!x.IsEmpty)
                     count++;
 
@@ -252,16 +257,14 @@ namespace SixLabors.Shapes
                 return ComplexPolygon.Empty;
 
             if (count == 1)
-                return figures[0].Build();
+                return _figures[0].Build();
 
-            var paths = new List<IPath>(count);
-            foreach (var x in figures)
+            var paths = ShapeListPools.Path.Rent(count);
+            foreach (var x in _figures)
                 if (!x.IsEmpty)
                     paths.Add(x.Build());
 
-            var polygon = new ComplexPolygon(paths.ToArray());
-            // TODO: add pooling
-            return polygon;
+            return new ComplexPolygon(paths);
         }
 
         /// <summary>
@@ -281,33 +284,68 @@ namespace SixLabors.Shapes
         public void Clear()
         {
             currentFigure.Clear();
-            this.figures.Clear();
-            this.figures.Add(this.currentFigure);
+            this._figures.Clear();
+            this._figures.Add(this.currentFigure);
         }
 
-        private class Figure
+        /// <summary>
+        /// Dispose the object, making it unusable.
+        /// </summary>
+        public void Dispose()
         {
-            private readonly List<ILineSegment> segments = new List<ILineSegment>();
+            if (!IsDisposed)
+            {
 
+                IsDisposed = true;
+            }
+        }
+
+        private class Figure : IDisposable
+        {
+            private List<ILineSegment> _segments;
+
+            public bool IsDisposed { get; private set; }
             public bool IsClosed { get; set; } = false;
+            public bool IsEmpty => this._segments.Count == 0;
 
-            public bool IsEmpty => this.segments.Count == 0;
+            public Figure()
+            {
+                _segments = ShapeListPools.Line.Rent();
+            }
 
             public void AddSegment(ILineSegment segment)
             {
-                this.segments.Add(segment);
+                this._segments.Add(segment);
             }
 
-            public IPath Build()
+            public Path Build()
             {
-                return this.IsClosed
-                    ? new Polygon(this.segments.ToArray())
-                    : new Path(this.segments.ToArray());
+                if (IsDisposed)
+                    throw new ObjectDisposedException(nameof(Figure));
+
+                var path = this.IsClosed ?
+                    new Polygon(this._segments) : new Path(this._segments);
+
+                Dispose();
+                return path;
             }
 
             public void Clear()
             {
-                segments.Clear();
+                foreach (var segment in _segments)
+                    segment.Dispose();
+                _segments.Clear();
+            }
+
+            public void Dispose()
+            {
+                if (!IsDisposed)
+                {
+                    ShapeListPools.Line.Return(_segments);
+                    _segments = null;
+
+                    IsDisposed = true;
+                }
             }
         }
     }

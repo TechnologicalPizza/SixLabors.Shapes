@@ -3,6 +3,7 @@
 
 using System;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -69,12 +70,13 @@ namespace SixLabors.Shapes
 
             float anglePerSegments = (float)((2 * Math.PI) / verticies);
             float current = angle;
-            var points = new PointF[verticies];
+
+            var points = PrimitiveListPools.PointF.Rent(verticies);
             for (int i = 0; i < verticies; i++)
             {
                 PointF rotated = PointF.Transform(distanceVector, Matrix3x2.CreateRotation(current));
 
-                points[i] = rotated + location;
+                points.Add(rotated + location);
 
                 current += anglePerSegments;
             }

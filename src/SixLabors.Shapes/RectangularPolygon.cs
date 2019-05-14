@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -16,10 +17,13 @@ namespace SixLabors.Shapes
     {
         private readonly Vector2 topLeft;
         private readonly Vector2 bottomRight;
-        private readonly PointF[] points;
         private readonly float halfLength;
         private readonly float length;
         private readonly RectangleF bounds;
+        private List<PointF> _points;
+
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RectangularPolygon" /> class.
@@ -45,13 +49,11 @@ namespace SixLabors.Shapes
             this.bottomRight = bottomRight;
             this.Size = new SizeF(bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
 
-            this.points = new PointF[4]
-            {
-                this.topLeft,
-                new Vector2(this.bottomRight.X, this.topLeft.Y),
-                this.bottomRight,
-                new Vector2(this.topLeft.X, this.bottomRight.Y)
-            };
+            this._points = PrimitiveListPools.PointF.Rent(4);
+            _points.Add(this.topLeft);
+            _points.Add(new Vector2(this.bottomRight.X, this.topLeft.Y));
+            _points.Add(this.bottomRight);
+            _points.Add(new Vector2(this.topLeft.X, this.bottomRight.Y));
 
             this.halfLength = this.Size.Width + this.Size.Height;
             this.length = this.halfLength * 2;
@@ -160,7 +162,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets the points that make this up as a simple linear path.
         /// </summary>
-        IReadOnlyList<PointF> ISimplePath.Points => this.points;
+        IReadOnlyList<PointF> ISimplePath.Points => this._points;
 
         /// <summary>
         /// Gets the size.
@@ -281,13 +283,17 @@ namespace SixLabors.Shapes
         /// </returns>
         public IPath Transform(Matrix3x2 matrix)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(RectangularPolygon));
+
             if (matrix.IsIdentity)
-            {
                 return this;
-            }
 
             // rectangles may be rotated and skewed which means they will then nedd representing by a polygon
-            return new Polygon(new LinearLineSegment(this.points).Transform(matrix));
+            // rent _points into secondary list as disposing the linear segment recycles _points
+            var secondary = PrimitiveListPools.PointF.Rent(this._points);
+            using (var linear = new LinearLineSegment(secondary))
+                return new Polygon(linear.Transform(matrix));
         }
 
         /// <inheritdoc />
@@ -355,10 +361,8 @@ namespace SixLabors.Shapes
             // Point in rectangle if after its clamped by the extremes its still the same then it must be inside :)
             Vector2 clamped = Vector2.Clamp(point, this.topLeft, this.bottomRight);
             bool isInside = clamped == vectorPoint;
-
-            float distanceFromEdge = float.MaxValue;
             float distanceAlongEdge = 0f;
-
+            float distanceFromEdge;
             if (isInside)
             {
                 // get the absolute distances from the extreams
@@ -497,6 +501,20 @@ namespace SixLabors.Shapes
             hashCode = (hashCode * -1521134295) + this.Width.GetHashCode();
             hashCode = (hashCode * -1521134295) + this.Height.GetHashCode();
             return hashCode;
+        }
+
+        /// <summary>
+        /// Disposes the path, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                PrimitiveListPools.PointF.Return(_points);
+                _points = null;
+
+                IsDisposed = true;
+            }
         }
     }
 }

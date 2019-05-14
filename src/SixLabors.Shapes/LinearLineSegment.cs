@@ -3,8 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
+using SixLabors.Memory;
 using SixLabors.Primitives;
 
 namespace SixLabors.Shapes
@@ -18,26 +18,28 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The collection of points.
         /// </summary>
-        private readonly PointF[] _points;
+        private List<PointF> _points;
+
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LinearLineSegment"/> class.
         /// </summary>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
-        public LinearLineSegment(PointF start, PointF end)
-            : this(new[] { start, end })
+        public LinearLineSegment(PointF start, PointF end) : this(MergeConstructorValues(start, end, null))
         {
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LinearLineSegment" /> class.
         /// </summary>
-        /// <param name="point1">The point1.</param>
-        /// <param name="point2">The point2.</param>
+        /// <param name="start">The start.</param>
+        /// <param name="end">The end.</param>
         /// <param name="additionalPoints">Additional points</param>
-        public LinearLineSegment(PointF point1, PointF point2, params PointF[] additionalPoints)
-            : this(new[] { point1, point2 }.Merge(additionalPoints))
+        public LinearLineSegment(PointF start, PointF end, params PointF[] additionalPoints) :
+            this(MergeConstructorValues(start, end, additionalPoints))
         {
         }
 
@@ -45,12 +47,29 @@ namespace SixLabors.Shapes
         /// Initializes a new instance of the <see cref="LinearLineSegment"/> class.
         /// </summary>
         /// <param name="points">The points.</param>
-        public LinearLineSegment(PointF[] points)
+        public LinearLineSegment(PointF[] points) : this(PrimitiveListPools.PointF.Rent(points))
         {
-            Guard.MustBeGreaterThanOrEqualTo(points.Length, 2, nameof(points));
+        }
+
+        internal LinearLineSegment(List<PointF> points)
+        {
+            Guard.MustBeGreaterThanOrEqualTo(points.Count, 2, nameof(points));
 
             this._points = points ?? throw new ArgumentNullException(nameof(points));
-            this.EndPoint = this._points[this._points.Length - 1];
+            this.EndPoint = this._points[this._points.Count - 1];
+        }
+
+        private static List<PointF> MergeConstructorValues(PointF p1, PointF p2, params PointF[] additional)
+        {
+            var list = PrimitiveListPools.PointF.Rent(2 + (additional?.Length).GetValueOrDefault());
+            list.Add(p1);
+            list.Add(p2);
+
+            if (additional != null)
+                foreach (var item in additional)
+                    list.Add(item);
+
+            return list;
         }
 
         /// <summary>
@@ -67,7 +86,12 @@ namespace SixLabors.Shapes
         /// <returns>
         /// Returns the current <see cref="ILineSegment" /> as simple linear path.
         /// </returns>
-        public IReadOnlyList<PointF> Flatten() => this._points;
+        public IReadOnlyList<PointF> Flatten()
+        {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(LinearLineSegment));
+            return this._points;
+        }
 
         /// <summary>
         /// Transforms the current LineSegment using specified matrix.
@@ -78,18 +102,18 @@ namespace SixLabors.Shapes
         /// </returns>
         public LinearLineSegment Transform(Matrix3x2 matrix)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(LinearLineSegment));
+
             if (matrix.IsIdentity)
             {
                 // no transform to apply skip it
                 return this;
             }
 
-            var transformedPoints = new PointF[this._points.Length];
-
-            for (int i = 0; i < this._points.Length; i++)
-            {
+            var transformedPoints = PrimitiveListPools.PointF.Rent(this._points.Count);
+            for (int i = 0; i < this._points.Count; i++)
                 transformedPoints[i] = PointF.Transform(this._points[i], matrix);
-            }
 
             return new LinearLineSegment(transformedPoints);
         }
@@ -100,5 +124,19 @@ namespace SixLabors.Shapes
         /// <param name="matrix">The matrix.</param>
         /// <returns>A line segment with the matrix applied to it.</returns>
         ILineSegment ILineSegment.Transform(Matrix3x2 matrix) => this.Transform(matrix);
+
+        /// <summary>
+        /// Disposes the path, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                PrimitiveListPools.PointF.Return(_points);
+                _points = null;
+
+                IsDisposed = true;
+            }
+        }
     }
 }

@@ -4555,8 +4555,9 @@ namespace ClipperLib
         public void AddPath(Path path, JoinType joinType, EndType endType)
         {
             int highI = path.Count - 1;
-            if (highI < 0) return;
-            PolyNode newNode = new PolyNode();
+            if (highI < 0)
+                return;
+            var newNode = new PolyNode();
             newNode.m_jointype = joinType;
             newNode.m_endtype = endType;
 

@@ -121,14 +121,10 @@ namespace SixLabors.Shapes.PolygonClipper
         public void AddPath(IPath path, ClippingType clippingType)
         {
             if (path is null)
-            {
                 throw new ArgumentNullException(nameof(path));
-            }
 
             foreach (ISimplePath p in path.Flatten())
-            {
                 this.AddPath(p, clippingType);
-            }
         }
 
         /// <summary>
@@ -142,8 +138,9 @@ namespace SixLabors.Shapes.PolygonClipper
             IReadOnlyList<PointF> vectors = path.Points;
 
             var points = new List<IntPoint>(vectors.Count);
-            foreach (PointF v in vectors)
+            for (int i = 0; i < vectors.Count; i++)
             {
+                var v = vectors[i];
                 points.Add(new IntPoint(v.X * ScalingFactor, v.Y * ScalingFactor));
             }
 

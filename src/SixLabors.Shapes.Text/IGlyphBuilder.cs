@@ -1,4 +1,6 @@
-﻿using SixLabors.Fonts;
+﻿using System.Collections.Generic;
+using SixLabors.Fonts;
+using SixLabors.Primitives;
 
 namespace SixLabors.Shapes.Text
 {
@@ -12,5 +14,12 @@ namespace SixLabors.Shapes.Text
         /// </summary>
         /// <returns>The <see cref="IPathCollection"/> path.</returns>
         IPathCollection BuildPath();
+
+        /// <summary>
+        /// Adds the current paths to the list.
+        /// </summary>
+        /// <param name="output">The output list.</param>
+        /// <returns>The bounds of the enclosing path.</returns>
+        RectangleF GetPath(ICollection<IPath> output);
     }
 }

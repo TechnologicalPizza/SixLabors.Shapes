@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Six Labors and contributors.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using SixLabors.Primitives;
@@ -10,7 +11,7 @@ namespace SixLabors.Shapes
     /// <summary>
     /// Represents a logic path that can be drawn
     /// </summary>
-    public interface IPathCollection : IEnumerable<IPath>
+    public interface IPathCollection : IEnumerable<IPath>, IDisposable
     {
         /// <summary>
         /// Gets the bounds enclosing the path

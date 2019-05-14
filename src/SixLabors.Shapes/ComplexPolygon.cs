@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using SixLabors.Primitives;
 
@@ -18,26 +17,16 @@ namespace SixLabors.Shapes
         /// <summary>
         /// A complex polygon with no paths.
         /// </summary>
-        public static readonly ComplexPolygon Empty = new ComplexPolygon(Array.Empty<IPath>());
+        public static readonly ComplexPolygon Empty = new ComplexPolygon(new List<IPath>(0));
 
-        private readonly IPath[] paths;
+        private List<IPath> _paths;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ComplexPolygon" /> class.
-        /// </summary>
-        /// <param name="paths">The paths.</param>
-        public ComplexPolygon(IEnumerable<IPath> paths)
-            : this(paths?.ToArray())
+        /// <inheritdoc/>
+        public bool IsDisposed { get; private set; }
+
+        internal ComplexPolygon(List<IPath> paths)
         {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ComplexPolygon" /> class.
-        /// </summary>
-        /// <param name="paths">The paths.</param>
-        public ComplexPolygon(params IPath[] paths)
-        {
-            this.paths = paths ?? throw new ArgumentNullException(nameof(paths));
+            this._paths = paths ?? throw new ArgumentNullException(nameof(paths));
 
             float minX = float.MaxValue;
             float maxX = float.MinValue;
@@ -46,7 +35,7 @@ namespace SixLabors.Shapes
             float length = 0;
             int intersections = 0;
 
-            foreach (IPath s in this.paths)
+            foreach (IPath s in this._paths)
             {
                 length += s.Length;
                 if (s.Bounds.Left < minX)
@@ -71,6 +60,22 @@ namespace SixLabors.Shapes
         }
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="ComplexPolygon" /> class.
+        /// </summary>
+        /// <param name="paths">The paths.</param>
+        public ComplexPolygon(IEnumerable<IPath> paths) : this(ShapeListPools.Path.Rent(paths))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ComplexPolygon" /> class.
+        /// </summary>
+        /// <param name="paths">The paths.</param>
+        public ComplexPolygon(params IPath[] paths) : this(ShapeListPools.Path.Rent(paths))
+        {
+        }
+
+        /// <summary>
         /// Gets the length of the path.
         /// </summary>
         public float Length { get; }
@@ -86,7 +91,7 @@ namespace SixLabors.Shapes
         /// <value>
         /// The paths.
         /// </value>
-        public IEnumerable<IPath> Paths => this.paths;
+        public IEnumerable<IPath> Paths => this._paths;
 
         /// <summary>
         /// Gets the bounding box of this shape.
@@ -121,7 +126,7 @@ namespace SixLabors.Shapes
             float dist = float.MaxValue;
             PointInfo pointInfo = default;
             bool inside = false;
-            foreach (IPath shape in this.Paths)
+            foreach (IPath shape in this._paths)
             {
                 PointInfo d = shape.Distance(point);
 
@@ -169,10 +174,10 @@ namespace SixLabors.Shapes
         public int FindIntersections(PointF start, PointF end, Span<PointF> buffer)
         {
             int totalAdded = 0;
-            for (int i = 0; i < this.paths.Length; i++)
+            for (int i = 0; i < this._paths.Count; i++)
             {
                 Span<PointF> subBuffer = buffer.Slice(totalAdded);
-                int added = this.paths[i].FindIntersections(start, end, subBuffer);
+                int added = this._paths[i].FindIntersections(start, end, subBuffer);
                 totalAdded += added;
             }
 
@@ -190,12 +195,10 @@ namespace SixLabors.Shapes
         public bool Contains(PointF point)
         {
             bool inside = false;
-            foreach (IPath shape in this.Paths)
+            foreach (IPath shape in this._paths)
             {
                 if (shape.Contains(point))
-                {
                     inside ^= true; // flip the inside flag
-                }
             }
 
             return inside;
@@ -210,37 +213,38 @@ namespace SixLabors.Shapes
         /// </returns>
         public IPath Transform(Matrix3x2 matrix)
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(ComplexPolygon));
+
             if (matrix.IsIdentity)
             {
                 // no transform to apply skip it
                 return this;
             }
 
-            var shapes = new IPath[this.paths.Length];
-            int i = 0;
-            foreach (IPath s in this.Paths)
-            {
-                shapes[i++] = s.Transform(matrix);
-            }
-
+            var shapes = ShapeListPools.Path.Rent(this._paths.Count);
+            for (int i = 0; i < this._paths.Count; i++)
+                shapes[i] = shapes[i].Transform(matrix);
             return new ComplexPolygon(shapes);
         }
 
         /// <summary>
-        /// Converts the <see cref="IPath" /> into a simple linear path..
+        /// Converts the <see cref="IPath" /> into a simple linear path.
         /// </summary>
         /// <returns>
         /// Returns the current <see cref="IPath" /> as simple linear path.
         /// </returns>
         public IEnumerable<ISimplePath> Flatten()
         {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(ComplexPolygon));
+            
             var paths = new List<ISimplePath>();
-            foreach (IPath path in this.Paths)
-            {
-                paths.AddRange(path.Flatten());
-            }
 
-            return paths.ToArray();
+            foreach (IPath path in this._paths)
+                paths.AddRange(path.Flatten());
+
+            return paths;
         }
 
         /// <summary>
@@ -251,18 +255,18 @@ namespace SixLabors.Shapes
         /// </returns>
         public IPath AsClosedPath()
         {
+            if(IsDisposed)
+                throw new ObjectDisposedException(nameof(ComplexPolygon));
+
             if (this.PathType == PathTypes.Closed)
             {
                 return this;
             }
             else
             {
-                var paths = new IPath[this.paths.Length];
-                for (int i = 0; i < this.paths.Length; i++)
-                {
-                    paths[i] = this.paths[i].AsClosedPath();
-                }
-
+                var paths = ShapeListPools.Path.Rent(this._paths.Count);
+                for (int i = 0; i < this._paths.Count; i++)
+                    paths.Add(this._paths[i].AsClosedPath());
                 return new ComplexPolygon(paths);
             }
         }
@@ -278,18 +282,33 @@ namespace SixLabors.Shapes
         {
             distanceAlongPath %= this.Length;
 
-            foreach (IPath p in this.Paths)
+            foreach (IPath p in this._paths)
             {
                 if (p.Length >= distanceAlongPath)
-                {
                     return p.PointAlongPath(distanceAlongPath);
-                }
 
                 // reduce it before trying the next path
                 distanceAlongPath -= p.Length;
             }
 
             throw new InvalidOperationException("Should not be possible to reach this line");
+        }
+
+        /// <summary>
+        /// Disposes the polygon, making it unusable.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!IsDisposed)
+            {
+                foreach (var path in _paths)
+                    path.Dispose();
+
+                ShapeListPools.Path.Return(_paths);
+                _paths = null;
+
+                IsDisposed = true;
+            }
         }
     }
 }
