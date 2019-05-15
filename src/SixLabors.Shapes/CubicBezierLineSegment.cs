@@ -30,15 +30,15 @@ namespace SixLabors.Shapes
 
         internal CubicBezierLineSegment(List<PointF> points)
         {
-            this._controlPoints = points ?? throw new ArgumentNullException(nameof(points));
-            Guard.MustBeGreaterThanOrEqualTo(this._controlPoints.Count, 4, nameof(points));
+            _controlPoints = points ?? throw new ArgumentNullException(nameof(points));
+            Guard.MustBeGreaterThanOrEqualTo(_controlPoints.Count, 4, nameof(points));
 
-            int correctPointCount = (this._controlPoints.Count - 1) % 3;
+            int correctPointCount = (_controlPoints.Count - 1) % 3;
             if (correctPointCount != 0)
                 throw new ArgumentOutOfRangeException(nameof(points), "Length must be a multiple of 3 plus 1.");
 
-            this.linePoints = GetDrawingPoints(this._controlPoints);
-            this.EndPoint = this._controlPoints[this._controlPoints.Count - 1];
+            linePoints = GetDrawingPoints(_controlPoints);
+            EndPoint = _controlPoints[_controlPoints.Count - 1];
         }
 
         /// <summary>
@@ -95,7 +95,7 @@ namespace SixLabors.Shapes
         {
             if (IsDisposed)
                 throw new ObjectDisposedException(nameof(CubicBezierLineSegment));
-            return this.linePoints;
+            return linePoints;
         }
 
         /// <summary>
@@ -114,12 +114,10 @@ namespace SixLabors.Shapes
                 return this;
             }
 
-            var transformedPoints = PrimitiveListPools.PointF.Rent(this._controlPoints.Count);
-
-            for (int i = 0; i < this._controlPoints.Count; i++)
-                transformedPoints[i] = PointF.Transform(this._controlPoints[i], matrix);
-
-            return new CubicBezierLineSegment(transformedPoints);
+            var transformed = PrimitiveListPools.PointF.Rent(_controlPoints.Count);
+            for (int i = 0; i < _controlPoints.Count; i++)
+                transformed.Add(PointF.Transform(_controlPoints[i], matrix));
+            return new CubicBezierLineSegment(transformed);
         }
 
         /// <summary>
@@ -127,7 +125,7 @@ namespace SixLabors.Shapes
         /// </summary>
         /// <param name="matrix">The matrix.</param>
         /// <returns>A line segment with the matrix applied to it.</returns>
-        ILineSegment ILineSegment.Transform(Matrix3x2 matrix) => this.Transform(matrix);
+        ILineSegment ILineSegment.Transform(Matrix3x2 matrix) => Transform(matrix);
 
         private static List<PointF> GetDrawingPoints(IList<PointF> controlPoints)
         {

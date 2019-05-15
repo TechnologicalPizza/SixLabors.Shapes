@@ -113,7 +113,7 @@ namespace SixLabors.Shapes
 
             var transformedPoints = PrimitiveListPools.PointF.Rent(this._points.Count);
             for (int i = 0; i < this._points.Count; i++)
-                transformedPoints[i] = PointF.Transform(this._points[i], matrix);
+                transformedPoints.Add(PointF.Transform(this._points[i], matrix));
 
             return new LinearLineSegment(transformedPoints);
         }

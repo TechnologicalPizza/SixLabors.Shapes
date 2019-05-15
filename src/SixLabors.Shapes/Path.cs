@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using SixLabors.Primitives;
 
@@ -15,11 +14,16 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public class Path : IPath, ISimplePath
     {
+        /// <summary>
+        /// A complex polygon with no paths that can not be disposed.
+        /// </summary>
+        public static readonly IPath Empty = new Undisposable();
+
         private List<ILineSegment> _lineSegments;
         private InternalPath innerPath;
 
         /// <inheritdoc/>
-        public bool IsDisposed { get; private set; }
+        public bool IsDisposed { get; protected set; }
 
         internal Path(List<ILineSegment> segments)
         {
@@ -71,7 +75,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets a value indicating whether this instance is closed, open or a composite path with a mixture of open and closed figures.
         /// </summary>
-        public PathTypes PathType => this.IsClosed ? PathTypes.Open : PathTypes.Closed;
+        public PathType PathType => this.IsClosed ? PathType.Open : PathType.Closed;
 
         /// <summary>
         /// Gets the maximum number intersections that a shape can have when testing a line.
@@ -208,7 +212,7 @@ namespace SixLabors.Shapes
         {
             return this.InnerPath.PointAlongPath(distanceAlongPath);
         }
-        
+
         /// <summary>
         /// Disposes the path, making it unusable.
         /// </summary>
@@ -216,15 +220,59 @@ namespace SixLabors.Shapes
         {
             if (!IsDisposed)
             {
+                Dispose(true);
+                IsDisposed = true;
+            }
+        }
+
+        /// <summary>
+        /// Disposes the path, making it unusable.
+        /// </summary>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
                 innerPath.Dispose();
 
                 foreach (var line in _lineSegments)
                     line.Dispose();
                 ShapeListPools.Line.Return(_lineSegments);
                 _lineSegments = null;
-
-                IsDisposed = true;
             }
+        }
+
+        /// <summary>
+        /// Path finalizer. Does not return lists to pool.
+        /// </summary>
+        ~Path()
+        {
+            Dispose(false);
+            GC.SuppressFinalize(this);
+        }
+
+        private class Undisposable : IPath, ISimplePath
+        {
+            public bool IsDisposed => false;
+            public bool IsClosed => true;
+            public IReadOnlyList<PointF> Points => Array.Empty<PointF>();
+            public PathType PathType => PathType.Closed;
+            public RectangleF Bounds => RectangleF.Empty;
+            public int MaxIntersections => 0;
+            public float Length => 0;
+
+            public Undisposable()
+            {
+            }
+
+            public IPath AsClosedPath() => this;
+            public bool Contains(PointF point) => false;
+            public PointInfo Distance(PointF point) => new PointInfo();
+            public int FindIntersections(PointF start, PointF end, PointF[] buffer, int offset) => 0;
+            public int FindIntersections(PointF start, PointF end, Span<PointF> buffer) => 0;
+            public IEnumerable<ISimplePath> Flatten() { yield return this; }
+            public SegmentInfo PointAlongPath(float distanceAlongPath) => new SegmentInfo();
+            public IPath Transform(Matrix3x2 matrix) => this;
+            public void Dispose() { }
         }
     }
 }

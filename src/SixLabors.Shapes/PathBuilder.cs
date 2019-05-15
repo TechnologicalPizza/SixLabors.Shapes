@@ -254,7 +254,7 @@ namespace SixLabors.Shapes
                     count++;
 
             if (count == 0)
-                return ComplexPolygon.Empty;
+                return Path.Empty;
 
             if (count == 1)
                 return _figures[0].Build();

@@ -6,7 +6,7 @@ namespace SixLabors.Shapes
     /// <summary>
     /// Describes the different type of paths.
     /// </summary>
-    public enum PathTypes
+    public enum PathType
     {
         /// <summary>
         /// Denotes a path containing a single simple open path

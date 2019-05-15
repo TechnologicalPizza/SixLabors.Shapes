@@ -400,9 +400,7 @@ namespace SixLabors.Shapes
             distanceAlongPath %= Length;
             int pointCount = PointCount;
             if (closedPath)
-            {
                 pointCount--;
-            }
 
             for (int i = 0; i < pointCount; i++)
             {
@@ -587,7 +585,7 @@ namespace SixLabors.Shapes
         /// </returns>
         private static List<PointData> Simplify(IEnumerable<ILineSegment> segments, bool isClosed)
         {
-            var simplified = PrimitiveListPools.PointF.Rent();
+            var tmp = PrimitiveListPools.PointF.Rent();
             try
             {
                 void Body(ILineSegment segment)
@@ -596,18 +594,18 @@ namespace SixLabors.Shapes
                     if (flatSegment is PointF[] array)
                     {
                         foreach (var point in array)
-                            simplified.Add(point);
+                            tmp.Add(point);
                     }
                     else if (flatSegment is IList<PointF> l)
                     {
                         int c = l.Count;
                         for (int i = 0; i < c; i++)
-                            simplified.Add(l[i]);
+                            tmp.Add(l[i]);
                     }
                     else
                     {
                         foreach (var point in flatSegment)
-                            simplified.Add(point);
+                            tmp.Add(point);
                     }
                 }
 
@@ -622,117 +620,105 @@ namespace SixLabors.Shapes
                     foreach (var segment in segments)
                         Body(segment);
                 }
-                return Simplify(simplified, isClosed);
+                return Simplify(tmp, isClosed);
             }
             finally
             {
-                PrimitiveListPools.PointF.Return(simplified);
+                PrimitiveListPools.PointF.Return(tmp);
             }
         }
 
         private static List<PointData> Simplify(IEnumerable<PointF> vectors, bool isClosed)
         {
-            bool prematureReturn = false;
-            var tmp = ShapeListPools.PointData.Rent();
-            try
-            {
-                var points = vectors is IList<PointF> list ? list : vectors.ToArray();
-                int polyCorners = points.Count;
-                Vector2 lastPoint = points[0];
+            var result = ShapeListPools.PointData.Rent();
+            var points = vectors is IList<PointF> list ? list : vectors.ToArray();
+            int polyCorners = points.Count;
+            Vector2 lastPoint = points[0];
 
-                if (!isClosed)
+            if (!isClosed)
+            {
+                result.Add(new PointData
                 {
-                    tmp.Add(new PointData
+                    Point = points[0],
+                    Orientation = Orientation.Colinear,
+                    Length = 0
+                });
+            }
+            else
+            {
+                int prev = polyCorners;
+                do
+                {
+                    prev--;
+                    if (prev == 0)
+                    {
+                        // all points are common, shouldn't match anything
+                        result.Add(
+                            new PointData
+                            {
+                                Point = points[0],
+                                Orientation = Orientation.Colinear,
+                                Segment = new Segment(points[0], points[1]),
+                                Length = 0,
+                                TotalLength = 0
+                            });
+                        return result;
+                    }
+                }
+                while (points[0].Equivalent(points[prev], Epsilon2)); // skip points too close together
+
+                polyCorners = prev + 1;
+                lastPoint = points[prev];
+
+                result.Add(
+                    new PointData
                     {
                         Point = points[0],
-                        Orientation = Orientation.Colinear,
-                        Length = 0
+                        Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
+                        Length = Vector2.Distance(lastPoint, points[0]),
+                        TotalLength = 0
                     });
-                }
-                else
-                {
-                    int prev = polyCorners;
-                    do
-                    {
-                        prev--;
-                        if (prev == 0)
-                        {
-                            // all points are common, shouldn't match anything
-                            tmp.Add(
-                                new PointData
-                                {
-                                    Point = points[0],
-                                    Orientation = Orientation.Colinear,
-                                    Segment = new Segment(points[0], points[1]),
-                                    Length = 0,
-                                    TotalLength = 0
-                                });
-                            prematureReturn = true;
-                            return tmp;
-                        }
-                    }
-                    while (points[0].Equivalent(points[prev], Epsilon2)); // skip points too close together
 
-                    polyCorners = prev + 1;
-                    lastPoint = points[prev];
-
-                    tmp.Add(
-                        new PointData
-                        {
-                            Point = points[0],
-                            Orientation = CalulateOrientation(lastPoint, points[0], points[1]),
-                            Length = Vector2.Distance(lastPoint, points[0]),
-                            TotalLength = 0
-                        });
-
-                    lastPoint = points[0];
-                }
-
-                float totalDist = 0;
-                for (int i = 1; i < polyCorners; i++)
-                {
-                    int next = WrapArrayIndex(i + 1, polyCorners);
-                    Orientation or = CalulateOrientation(lastPoint, points[i], points[next]);
-                    if (or == Orientation.Colinear && next != 0)
-                        continue;
-
-                    float dist = Vector2.Distance(lastPoint, points[i]);
-                    totalDist += dist;
-                    tmp.Add(
-                        new PointData
-                        {
-                            Point = points[i],
-                            Orientation = or,
-                            Length = dist,
-                            TotalLength = totalDist
-                        });
-                    lastPoint = points[i];
-                }
-
-                if (isClosed)
-                {
-                    // walk back removing collinear points
-                    while (tmp.Count > 2 && tmp[tmp.Count - 1].Orientation == Orientation.Colinear)
-                        tmp.RemoveAt(tmp.Count - 1);
-                }
-
-                var result = ShapeListPools.PointData.Rent(tmp);
-                for (int i = 0; i < tmp.Count; i++)
-                {
-                    int nextIndex = WrapArrayIndex(i + 1, tmp.Count);
-                    PointData current = i >= result.Count ? default : result[i];
-                    PointData next = nextIndex >= result.Count ? default : result[nextIndex];
-
-                    current.Segment = new Segment(current.Point, next.Point);
-                    result.Insert(i, current);
-                }
-                return result;
+                lastPoint = points[0];
             }
-            finally
+
+            float totalDist = 0;
+            for (int i = 1; i < polyCorners; i++)
             {
-                if(!prematureReturn)
-                    ShapeListPools.PointData.Return(tmp);
+                int next = WrapArrayIndex(i + 1, polyCorners);
+                Orientation or = CalulateOrientation(lastPoint, points[i], points[next]);
+                if (or == Orientation.Colinear && next != 0)
+                    continue;
+
+                float dist = Vector2.Distance(lastPoint, points[i]);
+                totalDist += dist;
+                result.Add(
+                    new PointData
+                    {
+                        Point = points[i],
+                        Orientation = or,
+                        Length = dist,
+                        TotalLength = totalDist
+                    });
+                lastPoint = points[i];
             }
+
+            if (isClosed)
+            {
+                // walk back removing collinear points
+                while (result.Count > 2 && result[result.Count - 1].Orientation == Orientation.Colinear)
+                    result.RemoveAt(result.Count - 1);
+            }
+
+            for (int i = 0; i < result.Count; i++)
+            {
+                PointData current = result[i];
+                int next = WrapArrayIndex(i + 1, result.Count);
+
+                current.Segment = new Segment(current.Point, result[next].Point);
+                result[i] = current;
+            }
+            return result;
         }
 
         private void ClampPoints(ref PointF start, ref PointF end)

@@ -26,7 +26,7 @@ namespace SixLabors.Shapes
         public Polygon(IEnumerable<ILineSegment> segments) : base(segments)
         {
         }
-        
+
         /// <summary>
         /// Initializes a new instance of the <see cref="Polygon"/> class.
         /// </summary>
@@ -52,12 +52,11 @@ namespace SixLabors.Shapes
             if (matrix.IsIdentity)
                 return this;
 
-            var segments = ShapeListPools.Line.Rent(this.LineSegments.Count);
-
-            for (int i = 0; i < LineSegments.Count; i++)
-                segments[i] = LineSegments[i].Transform(matrix);
-
-            return new Polygon(segments);
+            var segments = LineSegments;
+            var transformed = ShapeListPools.Line.Rent(segments.Count);
+            for (int i = 0; i < segments.Count; i++)
+                transformed.Add(segments[i].Transform(matrix));
+            return new Polygon(transformed);
         }
     }
 }

@@ -54,10 +54,8 @@ namespace SixLabors.Shapes
         public IPathCollection Transform(Matrix3x2 matrix)
         {
             List<IPath> result = ShapeListPools.Path.Rent(_paths.Count);
-
             for (int i = 0; i < _paths.Count; i++)
                 result.Add(_paths[i].Transform(matrix));
-
             return new PathCollection(result);
         }
 

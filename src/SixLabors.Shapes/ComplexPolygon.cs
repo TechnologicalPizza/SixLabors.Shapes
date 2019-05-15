@@ -14,11 +14,6 @@ namespace SixLabors.Shapes
     /// <seealso cref="IPath" />
     public sealed class ComplexPolygon : IPath
     {
-        /// <summary>
-        /// A complex polygon with no paths.
-        /// </summary>
-        public static readonly ComplexPolygon Empty = new ComplexPolygon(new List<IPath>(0));
-
         private List<IPath> _paths;
 
         /// <inheritdoc/>
@@ -56,7 +51,7 @@ namespace SixLabors.Shapes
             this.MaxIntersections = intersections;
             this.Length = length;
             this.Bounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
-            this.PathType = PathTypes.Mixed;
+            this.PathType = PathType.Mixed;
         }
 
         /// <summary>
@@ -83,7 +78,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets a value indicating whether this instance is closed, open or a composite path with a mixture of open and closed figures.
         /// </summary>
-        public PathTypes PathType { get; }
+        public PathType PathType { get; }
 
         /// <summary>
         /// Gets the paths that make up this shape
@@ -224,7 +219,7 @@ namespace SixLabors.Shapes
 
             var shapes = ShapeListPools.Path.Rent(this._paths.Count);
             for (int i = 0; i < this._paths.Count; i++)
-                shapes[i] = shapes[i].Transform(matrix);
+                shapes.Add(this._paths[i].Transform(matrix));
             return new ComplexPolygon(shapes);
         }
 
@@ -258,7 +253,7 @@ namespace SixLabors.Shapes
             if(IsDisposed)
                 throw new ObjectDisposedException(nameof(ComplexPolygon));
 
-            if (this.PathType == PathTypes.Closed)
+            if (this.PathType == PathType.Closed)
             {
                 return this;
             }

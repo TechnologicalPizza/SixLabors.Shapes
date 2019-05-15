@@ -191,7 +191,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// Gets a value indicating whether this instance is closed, open or a composite path with a mixture of open and closed figures.
         /// </summary>
-        PathTypes IPath.PathType => PathTypes.Closed;
+        PathType IPath.PathType => PathType.Closed;
 
         /// <summary>
         /// Gets the center.
