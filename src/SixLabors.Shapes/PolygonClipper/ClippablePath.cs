@@ -9,17 +9,6 @@ namespace SixLabors.Shapes.PolygonClipper
     public readonly struct ClippablePath
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="ClippablePath" /> struct.
-        /// </summary>
-        /// <param name="path">The path.</param>
-        /// <param name="type">The type.</param>
-        public ClippablePath(IPath path, ClippingType type)
-        {
-            this.Path = path;
-            this.Type = type;
-        }
-
-        /// <summary>
         /// Gets the path.
         /// </summary>
         public IPath Path { get; }
@@ -31,5 +20,16 @@ namespace SixLabors.Shapes.PolygonClipper
         /// The type.
         /// </value>
         public ClippingType Type { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ClippablePath" /> struct.
+        /// </summary>
+        /// <param name="path">The path.</param>
+        /// <param name="type">The type.</param>
+        public ClippablePath(IPath path, ClippingType type)
+        {
+            this.Path = path;
+            this.Type = type;
+        }
     }
 }

@@ -22,7 +22,7 @@ namespace SixLabors.Shapes
         /// <summary>
         /// The line points.
         /// </summary>
-        private List<PointF> linePoints;
+        private List<PointF> _linePoints;
         private List<PointF> _controlPoints;
 
         /// <inheritdoc/>
@@ -37,7 +37,7 @@ namespace SixLabors.Shapes
             if (correctPointCount != 0)
                 throw new ArgumentOutOfRangeException(nameof(points), "Length must be a multiple of 3 plus 1.");
 
-            linePoints = GetDrawingPoints(_controlPoints);
+            _linePoints = GetDrawingPoints(_controlPoints);
             EndPoint = _controlPoints[_controlPoints.Count - 1];
         }
 
@@ -95,7 +95,7 @@ namespace SixLabors.Shapes
         {
             if (IsDisposed)
                 throw new ObjectDisposedException(nameof(CubicBezierLineSegment));
-            return linePoints;
+            return _linePoints;
         }
 
         /// <summary>
@@ -250,8 +250,8 @@ namespace SixLabors.Shapes
         {
             if (!IsDisposed)
             {
-                PrimitiveListPools.PointF.Return(linePoints);
-                linePoints = null;
+                PrimitiveListPools.PointF.Return(_linePoints);
+                _linePoints = null;
 
                 PrimitiveListPools.PointF.Return(_controlPoints);
                 _controlPoints = null;

@@ -15,6 +15,8 @@ namespace SixLabors.Shapes
     /// <seealso cref="ILineSegment" />
     public sealed class LinearLineSegment : ILineSegment
     {
+        private static ListPool<LinearLineSegment> _linePool = new ListPool<LinearLineSegment>(4096);
+
         /// <summary>
         /// The collection of points.
         /// </summary>
@@ -68,7 +70,6 @@ namespace SixLabors.Shapes
             if (additional != null)
                 foreach (var item in additional)
                     list.Add(item);
-
             return list;
         }
 
@@ -114,7 +115,6 @@ namespace SixLabors.Shapes
             var transformedPoints = PrimitiveListPools.PointF.Rent(this._points.Count);
             for (int i = 0; i < this._points.Count; i++)
                 transformedPoints.Add(PointF.Transform(this._points[i], matrix));
-
             return new LinearLineSegment(transformedPoints);
         }
 

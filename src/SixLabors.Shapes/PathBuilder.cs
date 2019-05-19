@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using SixLabors.Memory;
 using SixLabors.Primitives;
@@ -132,7 +131,8 @@ namespace SixLabors.Shapes
             if (points is null)
                 throw new ArgumentNullException(nameof(points));
 
-            this.AddLines(points.ToArray());
+            using (var segment = new LinearLineSegment(PrimitiveListPools.PointF.Rent(points)))
+                AddSegment(segment);
             return this;
         }
 
@@ -143,7 +143,8 @@ namespace SixLabors.Shapes
         /// <returns>The <see cref="PathBuilder"/></returns>
         public PathBuilder AddLines(params PointF[] points)
         {
-            this.AddSegment(new LinearLineSegment(points));
+            using (var segment = new LinearLineSegment(points))
+                AddSegment(segment);
             return this;
         }
 

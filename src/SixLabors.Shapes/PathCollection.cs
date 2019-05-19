@@ -13,7 +13,7 @@ namespace SixLabors.Shapes
     /// A aggregate of <see cref="IPath"/>s to apply common operations to them.
     /// </summary>
     /// <seealso cref="IPath" />
-    public class PathCollection : IReadOnlyList<IPath>, IPathCollection
+    public class PathCollection : IList<IPath>, IPathCollection
     {
         internal static readonly Func<IPath, float> GetLeft = x => x.Bounds.Left;
         internal static readonly Func<IPath, float> GetRight = x => x.Bounds.Right;
@@ -24,6 +24,37 @@ namespace SixLabors.Shapes
 
         /// <inheritdoc />
         public bool IsDisposed { get; private set; }
+
+        /// <inheritdoc />
+        public RectangleF Bounds { get; private set; }
+
+        /// <summary>
+        /// Gets the number of paths in the collection.
+        /// </summary>
+        public int Count => _paths.Count;
+
+        /// <summary>
+        /// Returns a path at an index.
+        /// </summary>
+        /// <param name="index">The index of the path.</param>
+        /// <returns>The path at the index.</returns>
+        public IPath this[int index]
+        {
+            get => _paths[index];
+            set => _paths[index] = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the total number of paths the internal list can hold without resizing.
+        /// </summary>
+        public int Capacity
+        {
+            get => _paths.Capacity;
+            set => _paths.Capacity = Capacity;
+        }
+
+        /// <inheritdoc />
+        public bool IsReadOnly => false;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PathCollection"/> class.
@@ -57,30 +88,6 @@ namespace SixLabors.Shapes
             return new PathCollection(paths);
         }
 
-        /// <inheritdoc />
-        public RectangleF Bounds { get; }
-
-        /// <summary>
-        /// Gets the number of paths in the collection.
-        /// </summary>
-        public int Count => _paths.Count;
-
-        /// <summary>
-        /// Returns a path at an index.
-        /// </summary>
-        /// <param name="index">The index of the path.</param>
-        /// <returns>The path at the index.</returns>
-        public IPath this[int index] => _paths[index];
-
-        /// <inheritdoc />
-        public IPathCollection Transform(Matrix3x2 matrix)
-        {
-            List<IPath> result = ShapeListPools.Path.Rent(_paths.Count);
-            for (int i = 0; i < _paths.Count; i++)
-                result.Add(_paths[i].Transform(matrix));
-            return PathCollection.FromList(result);
-        }
-
         /// <summary>
         /// Gets the bounds enclosing the path.
         /// </summary>
@@ -99,6 +106,52 @@ namespace SixLabors.Shapes
         }
 
         /// <summary>
+        /// Recalculates the bounds from the underlying list.
+        /// </summary>
+        public void RecalculateBounds()
+        {
+            Bounds = GetBounds(_paths);
+        }
+
+        /// <inheritdoc />
+        public IPathCollection Transform(Matrix3x2 matrix)
+        {
+            var result = ShapeListPools.Path.Rent(_paths.Count);
+            for (int i = 0; i < _paths.Count; i++)
+                result.Add(_paths[i].Transform(matrix));
+            return FromList(result);
+        }
+
+        /// <inheritdoc />
+        public void Clear()
+        {
+            foreach (var p in _paths)
+                p.Dispose();
+            _paths.Clear();
+        }
+
+        /// <inheritdoc />
+        public void Add(IPath item) => _paths.Add(item);
+
+        /// <inheritdoc />
+        public bool Contains(IPath item) => _paths.Contains(item);
+
+        /// <inheritdoc />
+        public void CopyTo(IPath[] array, int arrayIndex) => _paths.CopyTo(array, arrayIndex);
+
+        /// <inheritdoc />
+        public bool Remove(IPath item) => _paths.Remove(item);
+
+        /// <inheritdoc />
+        public int IndexOf(IPath item) => _paths.IndexOf(item);
+    
+        /// <inheritdoc />
+        public void Insert(int index, IPath item) => _paths.Insert(index, item);
+    
+        /// <inheritdoc />
+        public void RemoveAt(int index) => _paths.RemoveAt(index);
+
+        /// <summary>
         /// Returns an enumerator that iterates through the <see cref="PathCollection"/>.
         /// </summary>
         /// <returns></returns>
@@ -109,10 +162,8 @@ namespace SixLabors.Shapes
 
         /// <inheritdoc />
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-        
-        /// <summary>
-        /// Disposes the collection, making it unusable.
-        /// </summary>
+
+        /// <inheritdoc />
         public void Dispose()
         {
             if (!IsDisposed)

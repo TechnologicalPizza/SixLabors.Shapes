@@ -83,14 +83,11 @@ namespace SixLabors.Shapes.PolygonClipper
         public void AddPaths(ClippablePath[] paths)
         {
             if (paths == null)
-            {
                 throw new ArgumentNullException(nameof(paths));
-            }
 
             for (int i = 0; i < paths.Length; i++)
             {
-                ref ClippablePath p = ref paths[i];
-
+                ClippablePath p = paths[i];
                 this.AddPath(p.Path, p.Type);
             }
         }
@@ -103,14 +100,10 @@ namespace SixLabors.Shapes.PolygonClipper
         public void AddPaths(IEnumerable<IPath> paths, ClippingType clippingType)
         {
             if (paths is null)
-            {
                 throw new ArgumentNullException(nameof(paths));
-            }
 
             foreach (IPath p in paths)
-            {
                 this.AddPath(p, clippingType);
-            }
         }
 
         /// <summary>
@@ -144,11 +137,9 @@ namespace SixLabors.Shapes.PolygonClipper
                 points.Add(new IntPoint(v.X * ScalingFactor, v.Y * ScalingFactor));
             }
 
-            PolyType type = clippingType == ClippingType.Clip ? PolyType.ptClip : PolyType.ptSubject;
+            var type = clippingType == ClippingType.Clip ? PolyType.ptClip : PolyType.ptSubject;
             lock (this.syncRoot)
-            {
                 this.innerClipper.AddPath(points, type, path.IsClosed);
-            }
         }
     }
 }
