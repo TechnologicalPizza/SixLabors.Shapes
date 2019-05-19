@@ -240,11 +240,11 @@ namespace SixLabors.Shapes
         }
 
         /// <summary>
-        /// Builds a complex polygon fromn the current working set of working operations.
+        /// Builds a complex polygon from the current set of operations.
         /// </summary>
         /// <returns>
         /// The current set of operations as a complex polygon 
-        /// or null if no operations were performed.
+        /// or an empty path if no operations were performed.
         /// </returns>
         public IPath Build()
         {
@@ -263,7 +263,6 @@ namespace SixLabors.Shapes
             foreach (var x in _figures)
                 if (!x.IsEmpty)
                     paths.Add(x.Build());
-
             return new ComplexPolygon(paths);
         }
 
@@ -279,12 +278,16 @@ namespace SixLabors.Shapes
         }
 
         /// <summary>
-        /// Clears all drawn paths, Leaving any applied transforms.
+        /// Clears and disposes all drawn paths (making them unusable), leaving any applied transforms.
         /// </summary>
         public void Clear()
         {
+            foreach (var figure in _figures)
+                if (figure != currentFigure)
+                    figure.Dispose();
+            _figures.Clear();
+
             currentFigure.Clear();
-            this._figures.Clear();
             this._figures.Add(this.currentFigure);
         }
 
@@ -295,7 +298,7 @@ namespace SixLabors.Shapes
         {
             if (!IsDisposed)
             {
-
+                Clear();
                 IsDisposed = true;
             }
         }
@@ -326,7 +329,6 @@ namespace SixLabors.Shapes
                 var path = this.IsClosed ?
                     new Polygon(this._segments) : new Path(this._segments);
 
-                Dispose();
                 return path;
             }
 
@@ -341,6 +343,7 @@ namespace SixLabors.Shapes
             {
                 if (!IsDisposed)
                 {
+                    Clear();
                     ShapeListPools.Line.Return(_segments);
                     _segments = null;
 

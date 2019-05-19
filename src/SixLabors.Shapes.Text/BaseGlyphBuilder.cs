@@ -149,6 +149,8 @@ namespace SixLabors.Shapes.Text
         public virtual void Clear()
         {
             Builder.Clear();
+            foreach (var path in _paths)
+                path.Dispose();
             _paths.Clear();
             _currentPoint = default;
         }
