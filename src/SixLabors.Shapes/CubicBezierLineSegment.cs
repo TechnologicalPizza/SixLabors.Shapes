@@ -130,25 +130,33 @@ namespace SixLabors.Shapes
         private static List<PointF> GetDrawingPoints(IList<PointF> controlPoints)
         {
             var drawingPoints = PrimitiveListPools.PointF.Rent();
-            int curveCount = (controlPoints.Count - 1) / 3;
-
             var tmp = PrimitiveListPools.PointF.Rent();
-            for (int curveIndex = 0; curveIndex < curveCount; curveIndex++)
+            try
             {
-                FindDrawingPoints(curveIndex, controlPoints, tmp);
-
-                if (curveIndex != 0)
+                int curveCount = (controlPoints.Count - 1) / 3;
+                for (int curveIndex = 0; curveIndex < curveCount; curveIndex++)
                 {
-                    // remove the first point, as it coincides with the last point of the previous Bezier curve.
-                    tmp.RemoveAt(0);
+                    FindDrawingPoints(curveIndex, controlPoints, tmp);
+
+                    if (curveIndex != 0)
+                        // remove the first point, as it coincides with
+                        // the last point of the previous Bezier curve
+                        tmp.RemoveAt(0);
+
+                    foreach (var p in tmp)
+                        drawingPoints.Add(p);
+                    tmp.Clear();
                 }
-
-                foreach (var p in tmp)
-                    drawingPoints.Add(p);
-                tmp.Clear();
             }
-            PrimitiveListPools.PointF.Return(tmp);
-
+            catch
+            {
+                PrimitiveListPools.PointF.Return(drawingPoints);
+                throw;
+            }
+            finally
+            {
+                PrimitiveListPools.PointF.Return(tmp);
+            }
             return drawingPoints;
         }
 

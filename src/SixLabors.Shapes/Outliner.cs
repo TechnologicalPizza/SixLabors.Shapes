@@ -214,19 +214,31 @@ namespace SixLabors.Shapes
         {
             var tree = new List<List<IntPoint>>();
             offset.Execute(ref tree, width * ScalingFactor / 2);
+
             var polygons = ShapeListPools.Path.Rent();
-
             var tmp = PrimitiveListPools.PointF.Rent();
-            foreach (List<IntPoint> pt in tree)
+            try
             {
-                foreach (var point in pt)
-                    tmp.Add(new PointF(point.X / ScalingFactor, point.Y / ScalingFactor));
+                foreach (List<IntPoint> pt in tree)
+                {
+                    foreach (var point in pt)
+                        tmp.Add(new PointF(point.X / ScalingFactor, point.Y / ScalingFactor));
 
-                polygons.Add(new Polygon(new LinearLineSegment(PrimitiveListPools.PointF.Rent(tmp))));
-                tmp.Clear();
+                    polygons.Add(new Polygon(new LinearLineSegment(PrimitiveListPools.PointF.Rent(tmp))));
+                    tmp.Clear();
+                }
             }
-            PrimitiveListPools.PointF.Return(tmp);
-
+            catch
+            {
+                foreach (var polygon in polygons)
+                    polygon.Dispose();
+                ShapeListPools.Path.Return(polygons);
+                throw;
+            }
+            finally
+            {
+                PrimitiveListPools.PointF.Return(tmp);
+            }
             return new ComplexPolygon(polygons);
         }
 
@@ -244,10 +256,9 @@ namespace SixLabors.Shapes
         {
             switch (style)
             {
-                case JointStyle.Round:
-                    return JoinType.jtRound;
-                case JointStyle.Miter:
-                    return JoinType.jtMiter;
+                case JointStyle.Round: return JoinType.jtRound;
+                case JointStyle.Miter: return JoinType.jtMiter;
+
                 case JointStyle.Square:
                 default:
                     return JoinType.jtSquare;
@@ -258,10 +269,9 @@ namespace SixLabors.Shapes
         {
             switch (style)
             {
-                case EndCapStyle.Round:
-                    return EndType.etOpenRound;
-                case EndCapStyle.Square:
-                    return EndType.etOpenSquare;
+                case EndCapStyle.Round: return EndType.etOpenRound;
+                case EndCapStyle.Square: return EndType.etOpenSquare;
+
                 case EndCapStyle.Butt:
                 default:
                     return EndType.etOpenButt;

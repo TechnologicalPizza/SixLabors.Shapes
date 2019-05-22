@@ -283,11 +283,7 @@ namespace SixLabors.Shapes
         /// </summary>
         public void Clear()
         {
-            foreach (var figure in _figures)
-                if (figure != currentFigure)
-                    figure.Dispose();
             _figures.Clear();
-
             currentFigure.Clear();
             this._figures.Add(this.currentFigure);
         }
@@ -335,8 +331,6 @@ namespace SixLabors.Shapes
 
             public void Clear()
             {
-                foreach (var segment in _segments)
-                    segment.Dispose();
                 _segments.Clear();
             }
 
